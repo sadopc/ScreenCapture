@@ -37,6 +37,12 @@ struct KeyboardShortcut: Equatable, Codable, Sendable {
         modifiers: UInt32(cmdKey | shiftKey)
     )
 
+    /// Default window capture shortcut: Command + Shift + 6
+    static let windowDefault = KeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_6),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
     // MARK: - Validation
 
     /// Checks if the shortcut includes at least one modifier key

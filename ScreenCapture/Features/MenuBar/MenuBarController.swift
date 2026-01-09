@@ -73,6 +73,16 @@ final class MenuBarController {
         selectionItem.target = appDelegate
         menu.addItem(selectionItem)
 
+        // Capture Window
+        let windowItem = NSMenuItem(
+            title: NSLocalizedString("menu.capture.window", comment: "Capture Window"),
+            action: #selector(AppDelegate.captureWindow),
+            keyEquivalent: "6"
+        )
+        windowItem.keyEquivalentModifierMask = [.command, .shift]
+        windowItem.target = appDelegate
+        menu.addItem(windowItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // Recent Captures submenu

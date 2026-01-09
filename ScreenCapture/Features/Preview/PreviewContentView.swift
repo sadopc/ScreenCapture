@@ -78,6 +78,7 @@ struct PreviewContentView: View {
                             // Base image
                             Image(viewModel.image, scale: 1.0, label: Text("Screenshot"))
                                 .resizable()
+                                .interpolation(.high)  // High quality downscaling
                                 .aspectRatio(contentMode: .fit)
                                 .frame(
                                     width: displayInfo.displaySize.width,

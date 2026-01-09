@@ -1,4 +1,5 @@
 import AppKit
+import ScreenCaptureKit
 
 /// Application delegate responsible for menu bar setup, hotkey registration, and app lifecycle.
 /// Runs on the main actor to ensure thread-safe UI operations.
@@ -17,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Registered hotkey for selection capture
     private var selectionHotkeyRegistration: HotkeyManager.Registration?
+
+    /// Registered hotkey for window capture
+    private var windowHotkeyRegistration: HotkeyManager.Registration?
 
     /// Shared app settings
     private let settings = AppSettings.shared
@@ -155,6 +159,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("Failed to register selection hotkey: \(error)")
             #endif
         }
+
+        // Register window capture hotkey
+        do {
+            windowHotkeyRegistration = try await hotkeyManager.register(
+                shortcut: settings.windowShortcut
+            ) { [weak self] in
+                Task { @MainActor in
+                    self?.captureWindow()
+                }
+            }
+            #if DEBUG
+            print("Registered window hotkey: \(settings.windowShortcut.displayString)")
+            #endif
+        } catch {
+            #if DEBUG
+            print("Failed to register window hotkey: \(error)")
+            #endif
+        }
     }
 
     /// Unregisters all global hotkeys
@@ -169,6 +191,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let registration = selectionHotkeyRegistration {
             await hotkeyManager.unregister(registration)
             selectionHotkeyRegistration = nil
+        }
+
+        if let registration = windowHotkeyRegistration {
+            await hotkeyManager.unregister(registration)
+            windowHotkeyRegistration = nil
         }
     }
 
@@ -282,6 +309,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 showCaptureError(.captureFailure(underlying: error))
             }
         }
+    }
+
+    /// Triggers a window capture
+    @objc func captureWindow() {
+        // Prevent overlapping captures
+        guard !isCaptureInProgress else {
+            #if DEBUG
+            print("Capture already in progress, ignoring request")
+            #endif
+            return
+        }
+
+        #if DEBUG
+        print("Window capture triggered via hotkey or menu")
+        #endif
+
+        isCaptureInProgress = true
+
+        Task {
+            do {
+                // Present the window selector
+                let selectorController = WindowSelectorController.shared
+
+                // Set up callbacks before presenting
+                selectorController.onWindowSelected = { [weak self] windowID in
+                    Task { @MainActor in
+                        await self?.handleWindowSelected(windowID)
+                    }
+                }
+
+                selectorController.onCancel = { [weak self] in
+                    Task { @MainActor in
+                        self?.handleWindowSelectionCancel()
+                    }
+                }
+
+                try await selectorController.presentSelector()
+
+            } catch {
+                isCaptureInProgress = false
+                #if DEBUG
+                print("Failed to present window selector: \(error)")
+                #endif
+                showCaptureError(.captureFailure(underlying: error))
+            }
+        }
+    }
+
+    /// Handles successful window selection
+    private func handleWindowSelected(_ windowID: CGWindowID) async {
+        defer { isCaptureInProgress = false }
+
+        do {
+            #if DEBUG
+            print("Window selected: ID \(windowID)")
+            #endif
+
+            // Capture the selected window by ID
+            let screenshot = try await WindowCaptureService.shared.captureWindowByID(windowID)
+
+            #if DEBUG
+            print("Window capture successful: \(screenshot.formattedDimensions)")
+            #endif
+
+            // Show preview window
+            PreviewWindowController.shared.showPreview(for: screenshot) { [weak self] savedURL in
+                // Add to recent captures when saved
+                self?.addRecentCapture(filePath: savedURL, image: screenshot.image)
+            }
+
+        } catch let error as ScreenCaptureError {
+            showCaptureError(error)
+        } catch {
+            showCaptureError(.captureFailure(underlying: error))
+        }
+    }
+
+    /// Handles window selection cancellation
+    private func handleWindowSelectionCancel() {
+        isCaptureInProgress = false
+        #if DEBUG
+        print("Window selection cancelled by user")
+        #endif
     }
 
     /// Handles successful selection completion

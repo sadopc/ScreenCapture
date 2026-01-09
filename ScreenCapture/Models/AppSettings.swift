@@ -20,6 +20,7 @@ final class AppSettings {
         static let jpegQuality = prefix + "jpegQuality"
         static let fullScreenShortcut = prefix + "fullScreenShortcut"
         static let selectionShortcut = prefix + "selectionShortcut"
+        static let windowShortcut = prefix + "windowShortcut"
         static let strokeColor = prefix + "strokeColor"
         static let strokeWidth = prefix + "strokeWidth"
         static let textSize = prefix + "textSize"
@@ -52,6 +53,11 @@ final class AppSettings {
     /// Global hotkey for selection capture
     var selectionShortcut: KeyboardShortcut {
         didSet { saveShortcut(selectionShortcut, forKey: Keys.selectionShortcut) }
+    }
+
+    /// Global hotkey for window capture
+    var windowShortcut: KeyboardShortcut {
+        didSet { saveShortcut(windowShortcut, forKey: Keys.windowShortcut) }
     }
 
     /// Default annotation stroke color
@@ -113,6 +119,8 @@ final class AppSettings {
             ?? KeyboardShortcut.fullScreenDefault
         selectionShortcut = Self.loadShortcut(forKey: Keys.selectionShortcut)
             ?? KeyboardShortcut.selectionDefault
+        windowShortcut = Self.loadShortcut(forKey: Keys.windowShortcut)
+            ?? KeyboardShortcut.windowDefault
 
         // Load annotation defaults
         strokeColor = Self.loadColor(forKey: Keys.strokeColor) ?? .red
@@ -163,6 +171,7 @@ final class AppSettings {
         jpegQuality = 0.9
         fullScreenShortcut = .fullScreenDefault
         selectionShortcut = .selectionDefault
+        windowShortcut = .windowDefault
         strokeColor = .red
         strokeWidth = 2.0
         textSize = 14.0
