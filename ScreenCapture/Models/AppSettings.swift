@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import ServiceManagement
 
 /// User preferences persisted across sessions via UserDefaults.
 /// All properties automatically sync to UserDefaults with the `ScreenCapture.` prefix.
@@ -20,11 +21,15 @@ final class AppSettings {
         static let jpegQuality = prefix + "jpegQuality"
         static let fullScreenShortcut = prefix + "fullScreenShortcut"
         static let selectionShortcut = prefix + "selectionShortcut"
+        static let windowShortcut = prefix + "windowShortcut"
+        static let windowWithShadowShortcut = prefix + "windowWithShadowShortcut"
         static let strokeColor = prefix + "strokeColor"
         static let strokeWidth = prefix + "strokeWidth"
         static let textSize = prefix + "textSize"
         static let rectangleFilled = prefix + "rectangleFilled"
+        static let blurRadius = prefix + "blurRadius"
         static let recentCaptures = prefix + "recentCaptures"
+        static let autoSaveOnClose = prefix + "autoSaveOnClose"
     }
 
     // MARK: - Properties
@@ -54,6 +59,16 @@ final class AppSettings {
         didSet { saveShortcut(selectionShortcut, forKey: Keys.selectionShortcut) }
     }
 
+    /// Global hotkey for window capture
+    var windowShortcut: KeyboardShortcut {
+        didSet { saveShortcut(windowShortcut, forKey: Keys.windowShortcut) }
+    }
+
+    /// Global hotkey for window capture with shadow
+    var windowWithShadowShortcut: KeyboardShortcut {
+        didSet { saveShortcut(windowWithShadowShortcut, forKey: Keys.windowWithShadowShortcut) }
+    }
+
     /// Default annotation stroke color
     var strokeColor: CodableColor {
         didSet { saveColor(strokeColor, forKey: Keys.strokeColor) }
@@ -74,9 +89,37 @@ final class AppSettings {
         didSet { save(rectangleFilled, forKey: Keys.rectangleFilled) }
     }
 
+    /// Default blur radius for blur tool
+    var blurRadius: CGFloat {
+        didSet { save(Double(blurRadius), forKey: Keys.blurRadius) }
+    }
+
     /// Last 5 saved captures
     var recentCaptures: [RecentCapture] {
         didSet { saveRecentCaptures() }
+    }
+
+    /// Whether to auto-save screenshots when closing the preview
+    var autoSaveOnClose: Bool {
+        didSet { save(autoSaveOnClose, forKey: Keys.autoSaveOnClose) }
+    }
+
+    /// Whether to launch at login
+    var launchAtLogin: Bool {
+        get {
+            SMAppService.mainApp.status == .enabled
+        }
+        set {
+            do {
+                if newValue {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                print("Failed to \(newValue ? "enable" : "disable") launch at login: \(error)")
+            }
+        }
     }
 
     // MARK: - Initialization
@@ -113,15 +156,23 @@ final class AppSettings {
             ?? KeyboardShortcut.fullScreenDefault
         selectionShortcut = Self.loadShortcut(forKey: Keys.selectionShortcut)
             ?? KeyboardShortcut.selectionDefault
+        windowShortcut = Self.loadShortcut(forKey: Keys.windowShortcut)
+            ?? KeyboardShortcut.windowDefault
+        windowWithShadowShortcut = Self.loadShortcut(forKey: Keys.windowWithShadowShortcut)
+            ?? KeyboardShortcut.windowWithShadowDefault
 
         // Load annotation defaults
         strokeColor = Self.loadColor(forKey: Keys.strokeColor) ?? .red
         strokeWidth = CGFloat(defaults.object(forKey: Keys.strokeWidth) as? Double ?? 2.0)
         textSize = CGFloat(defaults.object(forKey: Keys.textSize) as? Double ?? 14.0)
         rectangleFilled = defaults.object(forKey: Keys.rectangleFilled) as? Bool ?? false
+        blurRadius = CGFloat(defaults.object(forKey: Keys.blurRadius) as? Double ?? 15.0)
 
         // Load recent captures
         recentCaptures = Self.loadRecentCaptures()
+
+        // Load auto-save setting (default: true)
+        autoSaveOnClose = defaults.object(forKey: Keys.autoSaveOnClose) as? Bool ?? true
 
         print("ScreenCapture launched - settings loaded from: \(loadedLocation.path)")
     }
@@ -163,11 +214,15 @@ final class AppSettings {
         jpegQuality = 0.9
         fullScreenShortcut = .fullScreenDefault
         selectionShortcut = .selectionDefault
+        windowShortcut = .windowDefault
+        windowWithShadowShortcut = .windowWithShadowDefault
         strokeColor = .red
         strokeWidth = 2.0
         textSize = 14.0
         rectangleFilled = false
+        blurRadius = 15.0
         recentCaptures = []
+        autoSaveOnClose = true
     }
 
     // MARK: - Private Persistence Helpers

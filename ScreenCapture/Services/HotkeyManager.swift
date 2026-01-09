@@ -132,6 +132,7 @@ actor HotkeyManager {
 
     /// Called when a hotkey event is received
     nonisolated func handleHotkeyEvent(id: UInt32) {
+        NSLog("[HotkeyManager] handleHotkeyEvent called with id: %u", id)
         Task {
             await invokeHandler(for: id)
         }
@@ -139,7 +140,12 @@ actor HotkeyManager {
 
     /// Invokes the handler for the given hotkey ID
     private func invokeHandler(for id: UInt32) {
-        guard let handler = handlers[id] else { return }
+        NSLog("[HotkeyManager] invokeHandler for id: %u", id)
+        guard let handler = handlers[id] else {
+            NSLog("[HotkeyManager] No handler found for id: %u", id)
+            return
+        }
+        NSLog("[HotkeyManager] Calling handler")
         handler()
     }
 
@@ -191,8 +197,11 @@ private func hotkeyEventHandler(
     _ event: EventRef?,
     _ userData: UnsafeMutableRawPointer?
 ) -> OSStatus {
+    NSLog("[HotkeyManager] hotkeyEventHandler called!")
+
     guard let event = event,
           let userData = userData else {
+        NSLog("[HotkeyManager] Missing event or userData")
         return OSStatus(eventNotHandledErr)
     }
 
@@ -209,8 +218,11 @@ private func hotkeyEventHandler(
     )
 
     guard status == noErr else {
+        NSLog("[HotkeyManager] GetEventParameter failed: %d", status)
         return OSStatus(eventNotHandledErr)
     }
+
+    NSLog("[HotkeyManager] Hotkey ID: %u", hotKeyID.id)
 
     // Get the HotkeyManager instance and handle the event
     let manager = Unmanaged<HotkeyManager>.fromOpaque(userData).takeUnretainedValue()

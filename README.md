@@ -16,9 +16,11 @@
 
 ## Features
 
-- **Instant Capture** - Full screen or region selection with global hotkeys
-- **Annotation Tools** - Rectangles, arrows, freehand drawing, and text
+- **Multiple Capture Modes** - Full screen, region selection, window, and window with shadow
+- **Annotation Tools** - Rectangles, arrows, freehand drawing, and text with floating style panel
 - **Multi-Monitor Support** - Works seamlessly across all connected displays
+- **Auto-Save** - Screenshots automatically saved when closing preview (configurable)
+- **Recent Captures** - Quick access to recent screenshots from menu bar and editor sidebar
 - **Quick Export** - Save to disk or copy to clipboard instantly
 - **Lightweight** - Runs quietly in your menu bar with minimal resources
 
@@ -37,8 +39,8 @@ Download the latest release from the [Releases](../../releases) page.
 
 ```bash
 # Clone the repository
-git clone https://github.com/sadopc/ScreenCapture.git
-cd ScreenCapture
+git clone https://github.com/diegoavarela/screencapture.git
+cd screencapture
 
 # Open in Xcode
 open ScreenCapture.xcodeproj
@@ -48,12 +50,16 @@ open ScreenCapture.xcodeproj
 
 ## Usage
 
-### Keyboard Shortcuts
+### Global Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+Shift+3` | Capture full screen |
-| `Cmd+Shift+4` | Capture selection |
+| `Cmd+Ctrl+3` | Capture full screen |
+| `Cmd+Ctrl+4` | Capture selection |
+| `Cmd+Ctrl+6` | Capture window |
+| `Cmd+Ctrl+7` | Capture window with shadow |
+
+> **Note**: Shortcuts can be customized in Settings.
 
 ### In Preview Window
 
@@ -61,13 +67,16 @@ open ScreenCapture.xcodeproj
 |----------|--------|
 | `Enter` / `Cmd+S` | Save screenshot |
 | `Cmd+C` | Copy to clipboard |
-| `Escape` | Dismiss |
+| `Escape` | Dismiss (auto-saves if enabled) |
 | `R` / `1` | Rectangle tool |
 | `D` / `2` | Freehand tool |
 | `A` / `3` | Arrow tool |
 | `T` / `4` | Text tool |
 | `C` | Crop mode |
+| `G` | Toggle recent captures gallery |
 | `Cmd+Z` | Undo |
+| `Cmd+Shift+Z` | Redo |
+| `Delete` | Delete selected annotation |
 
 ## Documentation
 

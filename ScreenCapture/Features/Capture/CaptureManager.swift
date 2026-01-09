@@ -198,14 +198,12 @@ actor CaptureManager {
             throw ScreenCaptureError.displayDisconnected(displayName: display.name)
         }
 
-        // Configure capture for the full display first
+        // Configure capture for the full display at native resolution
         let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
         let config = createCaptureConfiguration(for: display)
 
-        // Set source rect for region capture
-        // sourceRect must be in PIXEL coordinates (not normalized!)
-        // The rect is in points from SelectionOverlayWindow, convert to pixels
-        let sourceRect = CGRect(
+        // Calculate the crop region in pixels
+        let cropRect = CGRect(
             x: rect.origin.x * display.scaleFactor,
             y: rect.origin.y * display.scaleFactor,
             width: rect.width * display.scaleFactor,
@@ -217,23 +215,17 @@ actor CaptureManager {
         print("[CAP-1] Input rect (points): \(rect)")
         print("[CAP-2] display.frame (points): \(display.frame)")
         print("[CAP-3] display.scaleFactor: \(display.scaleFactor)")
-        print("[CAP-4] sourceRect (pixels): \(sourceRect)")
+        print("[CAP-4] cropRect (pixels): \(cropRect)")
         print("=== END CAPTURE MANAGER DEBUG ===")
         #endif
 
-        config.sourceRect = sourceRect
-
-        // Adjust output size to match the region
-        config.width = Int(rect.width * display.scaleFactor)
-        config.height = Int(rect.height * display.scaleFactor)
-
-        // Perform capture with signpost for profiling
+        // Capture full display at native resolution (no sourceRect to avoid scaling)
         os_signpost(.begin, log: Self.performanceLog, name: "RegionCapture", signpostID: Self.signpostID)
         let captureStartTime = CFAbsoluteTimeGetCurrent()
 
-        let cgImage: CGImage
+        let fullImage: CGImage
         do {
-            cgImage = try await SCScreenshotManager.captureImage(
+            fullImage = try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
                 configuration: config
             )
@@ -242,11 +234,19 @@ actor CaptureManager {
             throw ScreenCaptureError.captureFailure(underlying: error)
         }
 
+        // Crop to the selected region - this preserves pixel-perfect quality
+        guard let cgImage = fullImage.cropping(to: cropRect) else {
+            os_signpost(.end, log: Self.performanceLog, name: "RegionCapture", signpostID: Self.signpostID)
+            throw ScreenCaptureError.captureError(message: "Failed to crop region")
+        }
+
         let captureLatency = (CFAbsoluteTimeGetCurrent() - captureStartTime) * 1000
         os_signpost(.end, log: Self.performanceLog, name: "RegionCapture", signpostID: Self.signpostID)
 
         #if DEBUG
         print("Region capture latency: \(String(format: "%.1f", captureLatency))ms")
+        print("[CAP-5] Full image size: \(fullImage.width)x\(fullImage.height)")
+        print("[CAP-6] Cropped image size: \(cgImage.width)x\(cgImage.height)")
         #endif
 
         // Create screenshot with metadata
@@ -287,6 +287,9 @@ actor CaptureManager {
         config.width = Int(display.frame.width * display.scaleFactor)
         config.height = Int(display.frame.height * display.scaleFactor)
 
+        // CRITICAL: Don't scale - capture at native pixel resolution
+        config.scalesToFit = false
+
         // High quality settings for screenshots
         config.minimumFrameInterval = CMTime(value: 1, timescale: 1) // Single frame
         config.pixelFormat = kCVPixelFormatType_32BGRA
@@ -294,6 +297,11 @@ actor CaptureManager {
 
         // Color settings for accurate reproduction
         config.colorSpaceName = CGColorSpace.sRGB
+
+        // Use best capture resolution on macOS 14+
+        if #available(macOS 14.0, *) {
+            config.captureResolution = .best
+        }
 
         return config
     }

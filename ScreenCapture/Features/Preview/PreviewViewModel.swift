@@ -106,6 +106,10 @@ final class PreviewViewModel {
     @ObservationIgnored
     private(set) var textTool = TextTool()
 
+    /// Blur tool
+    @ObservationIgnored
+    private(set) var blurTool = BlurTool()
+
     /// Counter to trigger view updates during drawing
     /// Incremented each time drawing state changes to force re-render
     private(set) var drawingUpdateCounter: Int = 0
@@ -153,6 +157,7 @@ final class PreviewViewModel {
         case .freehand: return freehandTool
         case .arrow: return arrowTool
         case .text: return textTool
+        case .blur: return blurTool
         }
     }
 
@@ -210,6 +215,11 @@ final class PreviewViewModel {
         screenshot.sourceDisplay.name
     }
 
+    /// Source display scale factor (for Retina displays)
+    var sourceScaleFactor: CGFloat {
+        screenshot.sourceDisplay.scaleFactor
+    }
+
     /// Current export format
     var format: ExportFormat {
         get { screenshot.format }
@@ -261,6 +271,42 @@ final class PreviewViewModel {
         guard isVisible else { return }
         isVisible = false
         onDismiss?()
+    }
+
+    /// Loads a recent capture into the editor for editing
+    func loadCapture(_ capture: RecentCapture) {
+        guard capture.fileExists else { return }
+
+        // Load image from file
+        guard let nsImage = NSImage(contentsOf: capture.filePath),
+              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+
+        // Clear undo/redo stacks
+        undoStack.removeAll()
+        redoStack.removeAll()
+
+        // Create new screenshot with the loaded image
+        screenshot = Screenshot(
+            image: cgImage,
+            captureDate: capture.captureDate,
+            sourceDisplay: DisplayInfo(
+                id: 0,
+                name: "Recent Capture",
+                frame: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height),
+                scaleFactor: 1.0,
+                isPrimary: true
+            ),
+            filePath: capture.filePath
+        )
+
+        // Reset tool state
+        selectedTool = nil
+        _currentAnnotation = nil
+        selectedAnnotationIndex = nil
+        isCropMode = false
+        cropRect = nil
     }
 
     /// Adds an annotation to the screenshot
@@ -354,6 +400,11 @@ final class PreviewViewModel {
             // Update observable properties for text input UI
             _isWaitingForTextInput = true
             _textInputPosition = point
+        case .blur:
+            // Read directly from shared settings to ensure we get the latest values
+            blurTool.blurRadius = AppSettings.shared.blurRadius
+            blurTool.brushSize = AppSettings.shared.strokeWidth * 10  // Use stroke width scaled up for brush
+            blurTool.beginDrawing(at: point)
         }
 
         updateCurrentAnnotation()
@@ -373,6 +424,8 @@ final class PreviewViewModel {
             arrowTool.continueDrawing(to: point)
         case .text:
             textTool.continueDrawing(to: point)
+        case .blur:
+            blurTool.continueDrawing(to: point)
         }
 
         updateCurrentAnnotation()
@@ -397,6 +450,8 @@ final class PreviewViewModel {
             _ = textTool.endDrawing(at: point)
             updateCurrentAnnotation()
             return
+        case .blur:
+            annotation = blurTool.endDrawing(at: point)
         }
 
         _currentAnnotation = nil
@@ -413,6 +468,7 @@ final class PreviewViewModel {
         freehandTool.cancelDrawing()
         arrowTool.cancelDrawing()
         textTool.cancelDrawing()
+        blurTool.cancelDrawing()
         _currentAnnotation = nil
         _isWaitingForTextInput = false
         _textInputPosition = nil
@@ -509,9 +565,8 @@ final class PreviewViewModel {
         // Exit crop mode
         isCropMode = false
         cropRect = nil
-
-        // Notify that image size changed (for window resize)
-        imageSizeChangeCounter += 1
+        // Note: We don't increment imageSizeChangeCounter here because
+        // crop should not resize the window, only the image within it
     }
 
     /// Cancels the current crop selection
@@ -585,6 +640,8 @@ final class PreviewViewModel {
             dragOriginalPosition = arrow.bounds.origin
         case .text(let text):
             dragOriginalPosition = text.position
+        case .blur(let blur):
+            dragOriginalPosition = blur.rect.origin
         }
     }
 
@@ -643,6 +700,16 @@ final class PreviewViewModel {
                 y: originalPosition.y + delta.y
             )
             updatedAnnotation = .text(text)
+
+        case .blur(var blur):
+            // Translate all points
+            blur.points = blur.points.map { point in
+                CGPoint(
+                    x: point.x + delta.x,
+                    y: point.y + delta.y
+                )
+            }
+            updatedAnnotation = .blur(blur)
         }
 
         if let updated = updatedAnnotation {
@@ -684,6 +751,10 @@ final class PreviewViewModel {
         case .text(var text):
             text.style.color = color
             updatedAnnotation = .text(text)
+
+        case .blur:
+            // Blur doesn't have a color
+            return
         }
 
         if let updated = updatedAnnotation {
@@ -717,6 +788,10 @@ final class PreviewViewModel {
         case .text:
             // Text doesn't have stroke width
             return
+
+        case .blur:
+            // Blur doesn't have stroke width
+            return
         }
 
         if let updated = updatedAnnotation {
@@ -749,6 +824,7 @@ final class PreviewViewModel {
         case .freehand: return .freehand
         case .arrow: return .arrow
         case .text: return .text
+        case .blur: return .blur
         }
     }
 
@@ -762,6 +838,7 @@ final class PreviewViewModel {
         case .freehand(let freehand): return freehand.style.color
         case .arrow(let arrow): return arrow.style.color
         case .text(let text): return text.style.color
+        case .blur: return nil  // Blur doesn't have a color
         }
     }
 
@@ -775,6 +852,7 @@ final class PreviewViewModel {
         case .freehand(let freehand): return freehand.style.lineWidth
         case .arrow(let arrow): return arrow.style.lineWidth
         case .text: return nil
+        case .blur: return nil  // Blur doesn't have stroke width
         }
     }
 
@@ -814,6 +892,31 @@ final class PreviewViewModel {
         redoStack.removeAll()
     }
 
+    /// Returns the blur radius of the selected blur annotation
+    var selectedAnnotationBlurRadius: CGFloat? {
+        guard let index = selectedAnnotationIndex,
+              index < annotations.count else { return nil }
+
+        if case .blur(let blur) = annotations[index] {
+            return blur.blurRadius
+        }
+        return nil
+    }
+
+    /// Updates the blur radius of the selected blur annotation
+    func updateSelectedAnnotationBlurRadius(_ radius: CGFloat) {
+        guard let index = selectedAnnotationIndex,
+              index < annotations.count else { return }
+
+        let annotation = annotations[index]
+        guard case .blur(var blur) = annotation else { return }
+
+        pushUndoState()
+        blur.blurRadius = radius
+        screenshot = screenshot.replacingAnnotation(at: index, with: .blur(blur))
+        redoStack.removeAll()
+    }
+
     /// Commits the current text input and adds the annotation
     func commitTextInput() {
         if let annotation = textTool.commitText() {
@@ -824,9 +927,14 @@ final class PreviewViewModel {
         _textInputPosition = nil
     }
 
-    /// Dismisses the preview (Escape key action)
+    /// Dismisses the preview - auto-saves before closing if enabled
     func dismiss() {
-        hide()
+        // Auto-save if enabled and not already saved
+        if settings.autoSaveOnClose && screenshot.filePath == nil && !isSaving {
+            saveScreenshot()
+        } else {
+            hide()
+        }
     }
 
     /// Copies the screenshot to clipboard (Cmd+C action)
@@ -943,6 +1051,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable, Sendable {
     case freehand
     case arrow
     case text
+    case blur
 
     var id: String { rawValue }
 
@@ -952,6 +1061,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable, Sendable {
         case .freehand: return "Draw"
         case .arrow: return "Arrow"
         case .text: return "Text"
+        case .blur: return "Blur"
         }
     }
 
@@ -961,6 +1071,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable, Sendable {
         case .freehand: return "d"
         case .arrow: return "a"
         case .text: return "t"
+        case .blur: return "b"
         }
     }
 
@@ -970,6 +1081,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable, Sendable {
         case .freehand: return "pencil.line"
         case .arrow: return "arrow.up.right"
         case .text: return "textformat"
+        case .blur: return "eye.slash"
         }
     }
 }

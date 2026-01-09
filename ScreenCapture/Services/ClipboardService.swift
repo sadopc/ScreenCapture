@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import CoreGraphics
+import CoreImage
 
 /// Service for copying screenshots to the system clipboard.
 /// Uses NSPasteboard for compatibility with all macOS applications.
@@ -92,7 +93,7 @@ struct ClipboardService: Sendable {
 
         // Draw each annotation
         for annotation in annotations {
-            renderAnnotation(annotation, in: context, imageHeight: CGFloat(height))
+            renderAnnotation(annotation, in: context, imageHeight: CGFloat(height), baseImage: image)
         }
 
         // Create final image
@@ -107,7 +108,8 @@ struct ClipboardService: Sendable {
     private func renderAnnotation(
         _ annotation: Annotation,
         in context: CGContext,
-        imageHeight: CGFloat
+        imageHeight: CGFloat,
+        baseImage: CGImage? = nil
     ) {
         switch annotation {
         case .rectangle(let rect):
@@ -118,6 +120,10 @@ struct ClipboardService: Sendable {
             renderArrow(arrow, in: context, imageHeight: imageHeight)
         case .text(let text):
             renderText(text, in: context, imageHeight: imageHeight)
+        case .blur(let blur):
+            if let baseImage = baseImage {
+                renderBlur(blur, in: context, imageHeight: imageHeight, baseImage: baseImage)
+            }
         }
     }
 
@@ -234,6 +240,95 @@ struct ClipboardService: Sendable {
         let line = CTLineCreateWithAttributedString(attributedString)
         context.textPosition = position
         CTLineDraw(line, context)
+        context.restoreGState()
+    }
+
+    /// Renders a blur annotation using Gaussian blur with brush-based clipping.
+    private func renderBlur(
+        _ annotation: BlurAnnotation,
+        in context: CGContext,
+        imageHeight: CGFloat,
+        baseImage: CGImage
+    ) {
+        guard annotation.points.count >= 2 else { return }
+
+        let imageWidth = CGFloat(baseImage.width)
+
+        // Get bounds of the blur stroke (in SwiftUI coordinates)
+        let bounds = annotation.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        // Clamp to image bounds
+        let clampedBounds = CGRect(
+            x: max(0, bounds.origin.x),
+            y: max(0, bounds.origin.y),
+            width: min(bounds.width, imageWidth - max(0, bounds.origin.x)),
+            height: min(bounds.height, imageHeight - max(0, bounds.origin.y))
+        )
+
+        guard clampedBounds.width > 0, clampedBounds.height > 0 else { return }
+
+        // Convert to CG coordinates (bottom-left origin)
+        let cgBounds = CGRect(
+            x: clampedBounds.origin.x,
+            y: imageHeight - clampedBounds.origin.y - clampedBounds.height,
+            width: clampedBounds.width,
+            height: clampedBounds.height
+        )
+
+        // Crop the region from base image
+        guard let croppedImage = baseImage.cropping(to: cgBounds) else { return }
+
+        // Apply Gaussian blur (invert the range so higher values = more blur)
+        let ciImage = CIImage(cgImage: croppedImage)
+        let effectiveSigma = 35.0 - annotation.blurRadius  // 5→30 (intense), 30→5 (light)
+        let blurredCIImage = ciImage.applyingGaussianBlur(sigma: effectiveSigma)
+
+        // Clamp the blurred image back to original bounds (blur expands the extent)
+        let clampedBlurred = blurredCIImage.clamped(to: ciImage.extent)
+        let ciContext = CIContext()
+        guard let blurredCGImage = ciContext.createCGImage(clampedBlurred, from: ciImage.extent) else { return }
+
+        // Create brush stroke path (in CG coordinates)
+        let brushPath = CGMutablePath()
+        let brushSize = annotation.brushSize
+
+        // Transform points from SwiftUI to CG coordinates
+        let cgPoints = annotation.points.map { point in
+            CGPoint(x: point.x, y: imageHeight - point.y)
+        }
+
+        // Add circles at each point
+        for point in cgPoints {
+            brushPath.addEllipse(in: CGRect(
+                x: point.x - brushSize / 2,
+                y: point.y - brushSize / 2,
+                width: brushSize,
+                height: brushSize
+            ))
+        }
+
+        // Add stroked line connecting points for continuous coverage
+        if cgPoints.count >= 2 {
+            let linePath = CGMutablePath()
+            linePath.move(to: cgPoints[0])
+            for point in cgPoints.dropFirst() {
+                linePath.addLine(to: point)
+            }
+            let strokedLine = linePath.copy(
+                strokingWithWidth: brushSize,
+                lineCap: .round,
+                lineJoin: .round,
+                miterLimit: 10
+            )
+            brushPath.addPath(strokedLine)
+        }
+
+        // Draw blurred image clipped to brush path
+        context.saveGState()
+        context.addPath(brushPath)
+        context.clip()
+        context.draw(blurredCGImage, in: cgBounds)
         context.restoreGState()
     }
 }

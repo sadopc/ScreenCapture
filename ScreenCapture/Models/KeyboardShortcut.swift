@@ -25,15 +25,29 @@ struct KeyboardShortcut: Equatable, Codable, Sendable {
 
     // MARK: - Default Shortcuts
 
-    /// Default full screen capture shortcut: Command + Shift + 3
+    /// Default full screen capture shortcut: Command + Control + 3
+    /// Note: Cmd+Shift+3 conflicts with macOS system screenshot
     static let fullScreenDefault = KeyboardShortcut(
         keyCode: UInt32(kVK_ANSI_3),
+        modifiers: UInt32(cmdKey | controlKey)
+    )
+
+    /// Default selection capture shortcut: Command + Control + 4
+    /// Note: Cmd+Shift+4 conflicts with macOS system screenshot
+    static let selectionDefault = KeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_4),
+        modifiers: UInt32(cmdKey | controlKey)
+    )
+
+    /// Default window capture shortcut: Command + Shift + 6
+    static let windowDefault = KeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_6),
         modifiers: UInt32(cmdKey | shiftKey)
     )
 
-    /// Default selection capture shortcut: Command + Shift + 4
-    static let selectionDefault = KeyboardShortcut(
-        keyCode: UInt32(kVK_ANSI_4),
+    /// Default window with shadow capture shortcut: Command + Shift + 7
+    static let windowWithShadowDefault = KeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_7),
         modifiers: UInt32(cmdKey | shiftKey)
     )
 
@@ -140,6 +154,64 @@ struct KeyboardShortcut: Equatable, Codable, Sendable {
         }
 
         return flags
+    }
+
+    // MARK: - NSMenuItem Support
+
+    /// Returns the key equivalent string for NSMenuItem (lowercase character)
+    var menuKeyEquivalent: String {
+        Self.keyCodeToMenuEquivalent(keyCode) ?? ""
+    }
+
+    /// Returns the modifier mask for NSMenuItem
+    var menuModifierMask: NSEvent.ModifierFlags {
+        nsModifierFlags
+    }
+
+    /// Converts a virtual key code to NSMenuItem key equivalent (lowercase)
+    private static func keyCodeToMenuEquivalent(_ keyCode: UInt32) -> String? {
+        switch Int(keyCode) {
+        case kVK_ANSI_0: return "0"
+        case kVK_ANSI_1: return "1"
+        case kVK_ANSI_2: return "2"
+        case kVK_ANSI_3: return "3"
+        case kVK_ANSI_4: return "4"
+        case kVK_ANSI_5: return "5"
+        case kVK_ANSI_6: return "6"
+        case kVK_ANSI_7: return "7"
+        case kVK_ANSI_8: return "8"
+        case kVK_ANSI_9: return "9"
+        case kVK_ANSI_A: return "a"
+        case kVK_ANSI_B: return "b"
+        case kVK_ANSI_C: return "c"
+        case kVK_ANSI_D: return "d"
+        case kVK_ANSI_E: return "e"
+        case kVK_ANSI_F: return "f"
+        case kVK_ANSI_G: return "g"
+        case kVK_ANSI_H: return "h"
+        case kVK_ANSI_I: return "i"
+        case kVK_ANSI_J: return "j"
+        case kVK_ANSI_K: return "k"
+        case kVK_ANSI_L: return "l"
+        case kVK_ANSI_M: return "m"
+        case kVK_ANSI_N: return "n"
+        case kVK_ANSI_O: return "o"
+        case kVK_ANSI_P: return "p"
+        case kVK_ANSI_Q: return "q"
+        case kVK_ANSI_R: return "r"
+        case kVK_ANSI_S: return "s"
+        case kVK_ANSI_T: return "t"
+        case kVK_ANSI_U: return "u"
+        case kVK_ANSI_V: return "v"
+        case kVK_ANSI_W: return "w"
+        case kVK_ANSI_X: return "x"
+        case kVK_ANSI_Y: return "y"
+        case kVK_ANSI_Z: return "z"
+        case kVK_Space: return " "
+        case kVK_Return: return "\r"
+        case kVK_Tab: return "\t"
+        default: return nil
+        }
     }
 
     // MARK: - Key Code to String

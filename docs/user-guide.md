@@ -33,7 +33,7 @@ The app runs in your menu bar with a camera icon.
 ### Full Screen Capture
 
 **Method 1: Keyboard Shortcut**
-- Press `Cmd + Shift + 3`
+- Press `Cmd + Ctrl + 3`
 
 **Method 2: Menu Bar**
 - Click the camera icon in menu bar
@@ -44,7 +44,7 @@ If you have multiple monitors, a menu will appear to select which display to cap
 ### Selection Capture
 
 **Method 1: Keyboard Shortcut**
-- Press `Cmd + Shift + 4`
+- Press `Cmd + Ctrl + 4`
 
 **Method 2: Menu Bar**
 - Click the camera icon in menu bar
@@ -54,6 +54,22 @@ If you have multiple monitors, a menu will appear to select which display to cap
 1. Click and drag to draw a rectangle
 2. The selected area is highlighted
 3. Release to capture
+4. Press `Escape` to cancel
+
+### Window Capture
+
+**Method 1: Keyboard Shortcut**
+- Press `Cmd + Ctrl + 6` for window only
+- Press `Cmd + Ctrl + 7` for window with shadow
+
+**Method 2: Menu Bar**
+- Click the camera icon in menu bar
+- Select "Capture Window" or "Capture Window + Shadow"
+
+**Selecting the Window:**
+1. Move mouse over the window you want to capture
+2. The window is highlighted with a blue border
+3. Click to capture
 4. Press `Escape` to cancel
 
 ---
@@ -68,7 +84,7 @@ After capturing, the Preview window appears showing your screenshot.
 |--------|--------|
 | Drag edges | Resize window |
 | Drag title bar | Move window |
-| Close button | Dismiss without saving |
+| Close button | Auto-save and dismiss (if enabled) |
 
 ### Quick Actions
 
@@ -76,7 +92,18 @@ After capturing, the Preview window appears showing your screenshot.
 |----------|--------|
 | `Enter` or `Cmd+S` | Save screenshot |
 | `Cmd+C` | Copy to clipboard and close |
-| `Escape` | Dismiss window |
+| `Escape` | Auto-save and dismiss (if enabled) |
+| `G` | Toggle recent captures gallery |
+
+### Floating Style Panel
+
+When you select an annotation tool (Rectangle, Arrow, etc.) or click on an existing annotation, a floating style panel appears over the image. This panel lets you:
+- Change color
+- Adjust stroke width
+- Toggle filled mode (for rectangles)
+- Change text size (for text tool)
+
+The panel floats above the image and doesn't affect the window size.
 
 ---
 
@@ -244,6 +271,12 @@ When using JPEG format, adjust quality:
 
 Range: 0% to 100% (default: 90%)
 
+### Auto-save on Close
+
+When enabled (default), screenshots are automatically saved when you close the preview window or press Escape. This ensures you never lose a capture.
+
+Toggle this in Settings → Auto-save on Close.
+
 ### Keyboard Shortcuts
 
 Customize global hotkeys:
@@ -253,8 +286,10 @@ Customize global hotkeys:
 3. Must include Cmd, Ctrl, or Option
 
 **Defaults:**
-- Full Screen: `Cmd+Shift+3`
-- Selection: `Cmd+Shift+4`
+- Full Screen: `Cmd+Ctrl+3`
+- Selection: `Cmd+Ctrl+4`
+- Window: `Cmd+Ctrl+6`
+- Window with Shadow: `Cmd+Ctrl+7`
 
 ### Annotation Defaults
 
@@ -273,15 +308,24 @@ Click "Reset to Defaults" to restore all settings.
 
 ## Recent Captures
 
-Access recently saved screenshots from the menu bar.
+Access and re-edit recently saved screenshots.
+
+### From Menu Bar
 
 1. Click menu bar icon
 2. Hover over "Recent Captures"
-3. Click any capture to open in Finder
+3. Click any capture to open in editor for further editing
+
+### From Editor Gallery
+
+1. In the preview window, press `G` to toggle the gallery sidebar
+2. Browse your recent captures with thumbnails
+3. Click any capture to load it for editing
 
 **Features:**
 - Shows last 5 captures
 - Displays thumbnails
+- Click to re-open in editor (add more annotations, crop, etc.)
 - "Clear Recent" removes the list
 
 ---
@@ -292,8 +336,10 @@ Access recently saved screenshots from the menu bar.
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+Shift+3` | Capture full screen |
-| `Cmd+Shift+4` | Capture selection |
+| `Cmd+Ctrl+3` | Capture full screen |
+| `Cmd+Ctrl+4` | Capture selection |
+| `Cmd+Ctrl+6` | Capture window |
+| `Cmd+Ctrl+7` | Capture window with shadow |
 
 ### In Preview Window
 
@@ -301,7 +347,7 @@ Access recently saved screenshots from the menu bar.
 |----------|--------|
 | `Enter` / `Cmd+S` | Save screenshot |
 | `Cmd+C` | Copy and close |
-| `Escape` | Deselect / Dismiss |
+| `Escape` | Deselect / Dismiss (auto-saves if enabled) |
 | `Delete` | Delete selected annotation |
 | `Cmd+Z` | Undo |
 | `Shift+Cmd+Z` | Redo |
@@ -310,13 +356,15 @@ Access recently saved screenshots from the menu bar.
 | `A` / `3` | Arrow tool |
 | `T` / `4` | Text tool |
 | `C` | Toggle crop mode |
+| `G` | Toggle recent captures gallery |
 
-### In Selection Mode
+### In Selection/Window Mode
 
 | Shortcut | Action |
 |----------|--------|
 | `Escape` | Cancel selection |
-| Click + Drag | Draw selection |
+| Click + Drag | Draw selection (selection mode) |
+| Click | Capture window (window mode) |
 | Release | Complete capture |
 
 ---
@@ -325,13 +373,20 @@ Access recently saved screenshots from the menu bar.
 
 ### Quick Annotation Workflow
 
-1. Capture with `Cmd+Shift+4`
+1. Capture with `Cmd+Ctrl+4`
 2. Draw selection
 3. Press `R` for rectangle
 4. Draw highlight
 5. Press `Cmd+C` to copy
 
 Total time: ~3 seconds!
+
+### Quick Window Capture
+
+1. Press `Cmd+Ctrl+6`
+2. Hover over target window (blue highlight appears)
+3. Click to capture
+4. Press `Escape` to dismiss (auto-saves)
 
 ### Multi-Monitor Capture
 
@@ -348,13 +403,21 @@ Screenshots automatically capture at native resolution:
 
 File sizes will be larger for Retina captures.
 
+### Re-edit Previous Captures
+
+Access any recent screenshot for further editing:
+1. Press `G` in the editor to open gallery
+2. Click a previous capture
+3. Add more annotations or crop
+4. Save again
+
 ### Keyboard-Only Workflow
 
 Never touch the mouse:
-1. `Cmd+Shift+3` - Capture
+1. `Cmd+Ctrl+3` - Capture full screen
 2. `R` - Rectangle tool
 3. Use mouse to draw (unavoidable)
-4. `Cmd+S` - Save
+4. `Escape` - Auto-save and close
 
 ---
 
