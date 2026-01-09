@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import ServiceManagement
 
 /// User preferences persisted across sessions via UserDefaults.
 /// All properties automatically sync to UserDefaults with the `ScreenCapture.` prefix.
@@ -27,6 +28,7 @@ final class AppSettings {
         static let textSize = prefix + "textSize"
         static let rectangleFilled = prefix + "rectangleFilled"
         static let recentCaptures = prefix + "recentCaptures"
+        static let autoSaveOnClose = prefix + "autoSaveOnClose"
     }
 
     // MARK: - Properties
@@ -91,6 +93,29 @@ final class AppSettings {
         didSet { saveRecentCaptures() }
     }
 
+    /// Whether to auto-save screenshots when closing the preview
+    var autoSaveOnClose: Bool {
+        didSet { save(autoSaveOnClose, forKey: Keys.autoSaveOnClose) }
+    }
+
+    /// Whether to launch at login
+    var launchAtLogin: Bool {
+        get {
+            SMAppService.mainApp.status == .enabled
+        }
+        set {
+            do {
+                if newValue {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                print("Failed to \(newValue ? "enable" : "disable") launch at login: \(error)")
+            }
+        }
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -139,6 +164,9 @@ final class AppSettings {
         // Load recent captures
         recentCaptures = Self.loadRecentCaptures()
 
+        // Load auto-save setting (default: true)
+        autoSaveOnClose = defaults.object(forKey: Keys.autoSaveOnClose) as? Bool ?? true
+
         print("ScreenCapture launched - settings loaded from: \(loadedLocation.path)")
     }
 
@@ -186,6 +214,7 @@ final class AppSettings {
         textSize = 14.0
         rectangleFilled = false
         recentCaptures = []
+        autoSaveOnClose = true
     }
 
     // MARK: - Private Persistence Helpers

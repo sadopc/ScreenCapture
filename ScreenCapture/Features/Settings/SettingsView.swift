@@ -43,7 +43,7 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.annotations)
         }
-        .frame(width: 500, height: 420)
+        .frame(width: 560, height: 640)
         .alert("Error", isPresented: $viewModel.showErrorAlert) {
             Button("OK") {
                 viewModel.errorMessage = nil
@@ -64,90 +64,86 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // Permissions Card
-                SettingsCard(title: "Permissions", icon: "lock.shield") {
-                    VStack(spacing: 12) {
+            VStack(spacing: 16) {
+                // Permissions Section
+                SettingsSection(title: "Permissions") {
+                    VStack(spacing: 0) {
                         PermissionRow(
                             icon: "record.circle",
                             title: "Screen Recording",
-                            description: "Required to capture screenshots",
                             isGranted: viewModel.hasScreenRecordingPermission,
                             isChecking: viewModel.isCheckingPermissions,
                             onGrant: { viewModel.requestScreenRecordingPermission() }
                         )
 
                         Divider()
+                            .padding(.leading, 44)
 
                         PermissionRow(
                             icon: "folder",
-                            title: "Save Location",
-                            description: "Required to save screenshots",
+                            title: "File Access",
                             isGranted: viewModel.hasFolderAccessPermission,
                             isChecking: viewModel.isCheckingPermissions,
                             onGrant: { viewModel.requestFolderAccess() }
                         )
-
-                        HStack {
-                            Spacer()
-                            Button {
-                                viewModel.checkPermissions()
-                            } label: {
-                                Label("Refresh", systemImage: "arrow.clockwise")
-                                    .font(.caption)
-                            }
-                            .buttonStyle(.borderless)
-                        }
                     }
                 }
                 .onAppear {
                     viewModel.checkPermissions()
                 }
 
-                // Save Location Card
-                SettingsCard(title: "Save Location", icon: "folder") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(viewModel.saveLocationPath)
-                                .font(.system(.body, design: .monospaced))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
+                // Save Location Section
+                SettingsSection(title: "Save Location") {
+                    HStack(spacing: 12) {
+                        Image(systemName: "folder.fill")
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+
+                        Text(viewModel.saveLocationPath)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
 
                         Spacer()
 
-                        Button("Choose...") {
+                        Button("Change...") {
                             viewModel.selectSaveLocation()
                         }
+                        .buttonStyle(.bordered)
 
                         Button {
                             viewModel.revealSaveLocation()
                         } label: {
-                            Image(systemName: "arrow.right.circle")
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.plain)
                         .help("Reveal in Finder")
                     }
+                    .padding(.vertical, 4)
                 }
 
-                // Export Format Card
-                SettingsCard(title: "Export Format", icon: "photo") {
-                    VStack(spacing: 12) {
+                // Export Format Section
+                SettingsSection(title: "Export Format") {
+                    VStack(spacing: 14) {
                         Picker("Format", selection: $viewModel.defaultFormat) {
                             Text("PNG").tag(ExportFormat.png)
                             Text("JPEG").tag(ExportFormat.jpeg)
                         }
                         .pickerStyle(.segmented)
+                        .labelsHidden()
 
                         if viewModel.defaultFormat == .jpeg {
-                            VStack(spacing: 8) {
+                            VStack(spacing: 10) {
                                 HStack {
                                     Text("Quality")
                                         .foregroundStyle(.secondary)
                                     Spacer()
                                     Text("\(Int(viewModel.jpegQualityPercentage))%")
-                                        .monospacedDigit()
-                                        .foregroundStyle(.secondary)
+                                        .font(.system(.body, design: .monospaced))
+                                        .foregroundStyle(.primary)
                                 }
 
                                 Slider(
@@ -155,14 +151,53 @@ private struct GeneralSettingsTab: View {
                                     in: SettingsViewModel.jpegQualityRange,
                                     step: 0.05
                                 )
-
-                                Text("Higher quality = larger file size")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                .tint(.blue)
                             }
                         }
                     }
                 }
+
+                // Startup Section
+                SettingsSection(title: "Startup") {
+                    VStack(spacing: 0) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Launch at Login")
+                                    .font(.body)
+                                Text("Start ScreenCapture when you log in")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $viewModel.launchAtLogin)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+
+                        Divider()
+                            .padding(.vertical, 10)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Auto-save on Close")
+                                    .font(.body)
+                                Text("Save screenshots automatically when closing preview")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $viewModel.autoSaveOnClose)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                    }
+                }
+
+                Spacer(minLength: 8)
 
                 // Reset Button
                 HStack {
@@ -171,13 +206,13 @@ private struct GeneralSettingsTab: View {
                         viewModel.resetAllToDefaults()
                     } label: {
                         Label("Reset All Settings", systemImage: "arrow.counterclockwise")
+                            .font(.callout)
                     }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.red)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.red.opacity(0.8))
                 }
-                .padding(.top, 8)
             }
-            .padding(20)
+            .padding(24)
         }
     }
 }
@@ -190,9 +225,9 @@ private struct ShortcutsSettingsTab: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                SettingsCard(title: "Capture Shortcuts", icon: "camera") {
-                    VStack(spacing: 16) {
+            VStack(spacing: 16) {
+                SettingsSection(title: "Capture Shortcuts") {
+                    VStack(spacing: 0) {
                         ShortcutRow(
                             icon: "rectangle.dashed",
                             label: "Full Screen",
@@ -202,7 +237,7 @@ private struct ShortcutsSettingsTab: View {
                             onReset: { viewModel.resetFullScreenShortcut() }
                         )
 
-                        Divider()
+                        Divider().padding(.leading, 44)
 
                         ShortcutRow(
                             icon: "crop",
@@ -213,7 +248,7 @@ private struct ShortcutsSettingsTab: View {
                             onReset: { viewModel.resetSelectionShortcut() }
                         )
 
-                        Divider()
+                        Divider().padding(.leading, 44)
 
                         ShortcutRow(
                             icon: "macwindow",
@@ -224,7 +259,7 @@ private struct ShortcutsSettingsTab: View {
                             onReset: { viewModel.resetWindowShortcut() }
                         )
 
-                        Divider()
+                        Divider().padding(.leading, 44)
 
                         ShortcutRow(
                             icon: "macwindow.on.rectangle",
@@ -238,16 +273,18 @@ private struct ShortcutsSettingsTab: View {
                 }
 
                 // Instructions
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle")
+                HStack(spacing: 10) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(.blue.opacity(0.7))
+                    Text("Click a shortcut to change it. Press Escape to cancel.")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                    Text("Click on a shortcut to change it. Press Escape to cancel.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
                 .padding(.horizontal, 4)
+                .padding(.top, 4)
             }
-            .padding(20)
+            .padding(24)
         }
     }
 }
@@ -260,12 +297,12 @@ private struct AnnotationsSettingsTab: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // Color Selection Card
-                SettingsCard(title: "Stroke Color", icon: "paintpalette") {
-                    VStack(spacing: 12) {
+            VStack(spacing: 16) {
+                // Color Selection
+                SettingsSection(title: "Stroke Color") {
+                    VStack(spacing: 14) {
                         // Preset Colors Grid
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 9), spacing: 8) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 9), spacing: 10) {
                             ForEach(SettingsViewModel.presetColors, id: \.self) { color in
                                 ColorButton(
                                     color: color,
@@ -275,71 +312,79 @@ private struct AnnotationsSettingsTab: View {
                             }
                         }
 
+                        Divider()
+
                         HStack {
-                            Text("Custom:")
+                            Text("Custom Color")
                                 .foregroundStyle(.secondary)
+                            Spacer()
                             ColorPicker("", selection: $viewModel.strokeColor, supportsOpacity: false)
                                 .labelsHidden()
-                            Spacer()
                         }
                     }
                 }
 
-                // Stroke Width Card
-                SettingsCard(title: "Stroke Width", icon: "lineweight") {
-                    VStack(spacing: 8) {
-                        HStack {
+                // Stroke Width
+                SettingsSection(title: "Stroke Width") {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 16) {
                             Slider(
                                 value: $viewModel.strokeWidth,
                                 in: SettingsViewModel.strokeWidthRange,
                                 step: 0.5
                             )
+                            .tint(.blue)
 
                             Text("\(viewModel.strokeWidth, specifier: "%.1f") pt")
                                 .font(.system(.body, design: .monospaced))
-                                .frame(width: 60, alignment: .trailing)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 55, alignment: .trailing)
                         }
 
                         // Visual Preview
                         HStack {
-                            Text("Preview:")
-                                .foregroundStyle(.secondary)
+                            Text("Preview")
+                                .font(.callout)
+                                .foregroundStyle(.tertiary)
                             Spacer()
                             RoundedRectangle(cornerRadius: viewModel.strokeWidth / 2)
                                 .fill(viewModel.strokeColor)
-                                .frame(width: 100, height: max(viewModel.strokeWidth, 2))
+                                .frame(width: 120, height: max(viewModel.strokeWidth, 2))
                         }
                     }
                 }
 
-                // Text Size Card
-                SettingsCard(title: "Text Size", icon: "textformat.size") {
-                    VStack(spacing: 8) {
-                        HStack {
+                // Text Size
+                SettingsSection(title: "Text Size") {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 16) {
                             Slider(
                                 value: $viewModel.textSize,
                                 in: SettingsViewModel.textSizeRange,
                                 step: 1
                             )
+                            .tint(.blue)
 
                             Text("\(Int(viewModel.textSize)) pt")
                                 .font(.system(.body, design: .monospaced))
-                                .frame(width: 60, alignment: .trailing)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 55, alignment: .trailing)
                         }
 
                         // Visual Preview
                         HStack {
-                            Text("Preview:")
-                                .foregroundStyle(.secondary)
+                            Text("Preview")
+                                .font(.callout)
+                                .foregroundStyle(.tertiary)
                             Spacer()
-                            Text("Aa")
-                                .font(.system(size: min(viewModel.textSize, 32)))
+                            Text("Sample Text")
+                                .font(.system(size: min(viewModel.textSize, 28)))
                                 .foregroundStyle(viewModel.strokeColor)
                         }
                     }
                 }
             }
-            .padding(20)
+            .padding(24)
         }
     }
 
@@ -358,24 +403,32 @@ private struct AnnotationsSettingsTab: View {
 
 // MARK: - Reusable Components
 
-/// A card container for settings sections.
-private struct SettingsCard<Content: View>: View {
+/// A section container for settings with a title.
+private struct SettingsSection<Content: View>: View {
     let title: String
-    let icon: String
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: icon)
+            Text(title)
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            content
+            VStack(spacing: 0) {
+                content
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(nsColor: .windowBackgroundColor))
+                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -383,27 +436,19 @@ private struct SettingsCard<Content: View>: View {
 private struct PermissionRow: View {
     let icon: String
     let title: String
-    let description: String
     let isGranted: Bool
     let isChecking: Bool
     let onGrant: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(isGranted ? .green : .secondary)
-                .frame(width: 28)
+                .foregroundStyle(isGranted ? .green : .orange)
+                .frame(width: 30)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .fontWeight(.medium)
-                if !isGranted && !isChecking {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text(title)
+                .font(.body)
 
             Spacer()
 
@@ -411,17 +456,22 @@ private struct PermissionRow: View {
                 ProgressView()
                     .controlSize(.small)
             } else if isGranted {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.title3)
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Granted")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             } else {
-                Button("Grant") {
+                Button("Grant Access") {
                     onGrant()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
         }
+        .padding(.vertical, 10)
     }
 }
 
@@ -435,32 +485,42 @@ private struct ShortcutRow: View {
     let onReset: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
+                .foregroundStyle(.blue)
+                .frame(width: 26)
 
             Text(label)
+                .font(.body)
 
             Spacer()
 
             Button {
                 onRecord()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     if isRecording {
-                        Text("Recording...")
+                        Circle()
+                            .fill(.red)
+                            .frame(width: 8, height: 8)
+                        Text("Press keys...")
                             .foregroundStyle(.secondary)
                     } else {
                         Text(shortcut.displayString)
-                            .fontWeight(.medium)
+                            .font(.system(.body, design: .monospaced, weight: .medium))
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isRecording ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isRecording ? Color.red.opacity(0.1) : Color.primary.opacity(0.05))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(isRecording ? Color.red.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: 1)
+                }
             }
             .buttonStyle(.plain)
 
@@ -468,12 +528,15 @@ private struct ShortcutRow: View {
                 onReset()
             } label: {
                 Image(systemName: "arrow.counterclockwise")
-                    .font(.caption)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .help("Reset to default")
             .disabled(isRecording)
+            .opacity(isRecording ? 0.4 : 1)
         }
+        .padding(.vertical, 10)
     }
 }
 
@@ -487,20 +550,21 @@ private struct ColorButton: View {
         Button(action: action) {
             Circle()
                 .fill(color)
-                .frame(width: 28, height: 28)
+                .frame(width: 30, height: 30)
                 .overlay {
                     if isSelected {
                         Circle()
                             .stroke(Color.primary, lineWidth: 2.5)
-                            .padding(2)
+                            .padding(3)
                     }
                 }
                 .overlay {
                     if color == .white || color == .yellow {
                         Circle()
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            .stroke(Color.gray.opacity(0.25), lineWidth: 1)
                     }
                 }
+                .shadow(color: .black.opacity(0.1), radius: 1, y: 1)
         }
         .buttonStyle(.plain)
     }

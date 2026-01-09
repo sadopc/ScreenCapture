@@ -4,7 +4,7 @@ import Combine
 /// Manages the menu bar status item and its menu.
 /// Responsible for setting up the menu bar icon and building the app menu.
 @MainActor
-final class MenuBarController {
+final class MenuBarController: NSObject, NSMenuDelegate {
     // MARK: - Properties
 
     /// The status item displayed in the menu bar
@@ -204,13 +204,27 @@ final class MenuBarController {
     /// Builds the recent captures submenu
     private func buildRecentCapturesMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.delegate = self // Reload captures when menu opens
         updateRecentCapturesMenu(menu)
         return menu
+    }
+
+    // MARK: - NSMenuDelegate
+
+    /// Called when the menu is about to open - reload recent captures
+    nonisolated func menuNeedsUpdate(_ menu: NSMenu) {
+        MainActor.assumeIsolated {
+            self.recentCapturesStore.reload()
+            if let recentMenu = self.recentCapturesMenu {
+                self.updateRecentCapturesMenu(recentMenu)
+            }
+        }
     }
 
     /// Updates the recent captures submenu with current captures
     func updateRecentCapturesMenu() {
         guard let menu = recentCapturesMenu else { return }
+        recentCapturesStore.reload() // Reload from UserDefaults before updating
         updateRecentCapturesMenu(menu)
     }
 
@@ -250,17 +264,40 @@ final class MenuBarController {
 
     // MARK: - Actions
 
-    /// Opens a recent capture file in Finder
+    /// Opens a recent capture in the editor for viewing/editing
     @objc private func openRecentCapture(_ sender: NSMenuItem) {
         guard let item = sender as? RecentCaptureMenuItem else { return }
-        let url = item.capture.filePath
+        let capture = item.capture
 
-        if item.capture.fileExists {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        } else {
+        guard capture.fileExists else {
             // File no longer exists, remove from recent captures
-            recentCapturesStore.remove(capture: item.capture)
+            recentCapturesStore.remove(capture: capture)
             updateRecentCapturesMenu()
+            return
+        }
+
+        // Load image from file
+        guard let nsImage = NSImage(contentsOf: capture.filePath),
+              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+
+        // Create screenshot and open in editor
+        let screenshot = Screenshot(
+            image: cgImage,
+            captureDate: capture.captureDate,
+            sourceDisplay: DisplayInfo(
+                id: 0,
+                name: "Recent Capture",
+                frame: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height),
+                scaleFactor: 1.0,
+                isPrimary: true
+            ),
+            filePath: capture.filePath
+        )
+
+        PreviewWindowController.shared.showPreview(for: screenshot) { [weak self] savedURL in
+            self?.appDelegate?.addRecentCapture(filePath: savedURL, image: cgImage)
         }
     }
 

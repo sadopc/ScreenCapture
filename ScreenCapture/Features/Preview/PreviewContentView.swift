@@ -86,10 +86,9 @@ struct PreviewContentView: View {
 
     // MARK: - Gallery Actions
 
-    /// Opens a recent capture in Finder (double-click behavior)
+    /// Loads a recent capture into the editor
     private func openCapture(_ capture: RecentCapture) {
-        guard capture.fileExists else { return }
-        NSWorkspace.shared.open(capture.filePath)
+        viewModel.loadCapture(capture)
     }
 
     /// Reveals a capture in Finder
@@ -189,6 +188,13 @@ struct PreviewContentView: View {
                             } else if viewModel.isCropMode {
                                 cropModeIndicator
                                     .padding(8)
+                            }
+                        }
+                        .overlay(alignment: .top) {
+                            // Floating style panel when tool is selected or annotation is being edited
+                            if viewModel.selectedTool != nil || viewModel.selectedAnnotationIndex != nil {
+                                floatingStylePanel
+                                    .padding(.top, 8)
                             }
                         }
                         .overlay(alignment: .bottom) {
@@ -609,19 +615,200 @@ struct PreviewContentView: View {
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
 
-            // Show customization options when a tool is selected OR an annotation is selected
-            if viewModel.selectedTool != nil || viewModel.selectedAnnotationIndex != nil {
-                Divider()
-                    .frame(height: 16)
-
-                styleCustomizationBar
-            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Annotation tools"))
     }
 
-    /// Style customization bar for color and stroke width
+    /// Floating style panel that appears over the image
+    private var floatingStylePanel: some View {
+        let isEditingAnnotation = viewModel.selectedAnnotationIndex != nil
+        let effectiveToolType = isEditingAnnotation ? viewModel.selectedAnnotationType : viewModel.selectedTool
+
+        return HStack(spacing: 8) {
+            // Color picker with preset colors
+            HStack(spacing: 4) {
+                ForEach(presetColors, id: \.self) { color in
+                    Button {
+                        if isEditingAnnotation {
+                            viewModel.updateSelectedAnnotationColor(CodableColor(color))
+                        } else {
+                            AppSettings.shared.strokeColor = CodableColor(color)
+                        }
+                    } label: {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 20, height: 20)
+                            .overlay {
+                                let currentColor = isEditingAnnotation
+                                    ? (viewModel.selectedAnnotationColor?.color ?? .clear)
+                                    : AppSettings.shared.strokeColor.color
+                                if colorsAreEqual(currentColor, color) {
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                }
+                            }
+                            .overlay {
+                                if color == .white || color == .yellow {
+                                    Circle()
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ColorPicker("", selection: Binding(
+                    get: {
+                        if isEditingAnnotation {
+                            return viewModel.selectedAnnotationColor?.color ?? .red
+                        }
+                        return AppSettings.shared.strokeColor.color
+                    },
+                    set: { newColor in
+                        if isEditingAnnotation {
+                            viewModel.updateSelectedAnnotationColor(CodableColor(newColor))
+                        } else {
+                            AppSettings.shared.strokeColor = CodableColor(newColor)
+                        }
+                    }
+                ), supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 24)
+            }
+
+            // Rectangle fill toggle (for rectangle only)
+            if effectiveToolType == .rectangle {
+                Divider()
+                    .frame(height: 20)
+
+                let isFilled = isEditingAnnotation
+                    ? (viewModel.selectedAnnotationIsFilled ?? false)
+                    : AppSettings.shared.rectangleFilled
+
+                Button {
+                    if isEditingAnnotation {
+                        viewModel.updateSelectedAnnotationFilled(!isFilled)
+                    } else {
+                        AppSettings.shared.rectangleFilled.toggle()
+                    }
+                } label: {
+                    Image(systemName: isFilled ? "rectangle.fill" : "rectangle")
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .help(isFilled ? "Filled (click for hollow)" : "Hollow (click for filled)")
+            }
+
+            // Stroke width control
+            if effectiveToolType == .freehand || effectiveToolType == .arrow ||
+               (effectiveToolType == .rectangle && !(isEditingAnnotation ? (viewModel.selectedAnnotationIsFilled ?? false) : AppSettings.shared.rectangleFilled)) {
+                Divider()
+                    .frame(height: 20)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "lineweight")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    Slider(
+                        value: Binding(
+                            get: {
+                                if isEditingAnnotation {
+                                    return viewModel.selectedAnnotationStrokeWidth ?? 3.0
+                                }
+                                return AppSettings.shared.strokeWidth
+                            },
+                            set: { newWidth in
+                                if isEditingAnnotation {
+                                    viewModel.updateSelectedAnnotationStrokeWidth(newWidth)
+                                } else {
+                                    AppSettings.shared.strokeWidth = newWidth
+                                }
+                            }
+                        ),
+                        in: 1.0...20.0,
+                        step: 0.5
+                    )
+                    .frame(width: 60)
+                    .tint(.white)
+
+                    let width = isEditingAnnotation
+                        ? Int(viewModel.selectedAnnotationStrokeWidth ?? 3)
+                        : Int(AppSettings.shared.strokeWidth)
+                    Text("\(width)")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 16)
+                }
+            }
+
+            // Text size control
+            if effectiveToolType == .text {
+                Divider()
+                    .frame(height: 20)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "textformat.size")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    Slider(
+                        value: Binding(
+                            get: {
+                                if isEditingAnnotation {
+                                    return viewModel.selectedAnnotationFontSize ?? 16.0
+                                }
+                                return AppSettings.shared.textSize
+                            },
+                            set: { newSize in
+                                if isEditingAnnotation {
+                                    viewModel.updateSelectedAnnotationFontSize(newSize)
+                                } else {
+                                    AppSettings.shared.textSize = newSize
+                                }
+                            }
+                        ),
+                        in: 8.0...72.0,
+                        step: 1
+                    )
+                    .frame(width: 60)
+                    .tint(.white)
+
+                    let size = isEditingAnnotation
+                        ? Int(viewModel.selectedAnnotationFontSize ?? 16)
+                        : Int(AppSettings.shared.textSize)
+                    Text("\(size)")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 20)
+                }
+            }
+
+            // Delete button for selected annotation
+            if isEditingAnnotation {
+                Divider()
+                    .frame(height: 20)
+
+                Button {
+                    viewModel.deleteSelectedAnnotation()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .help("Delete annotation")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.75))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Style customization bar for color and stroke width (unused, kept for reference)
     @ViewBuilder
     private var styleCustomizationBar: some View {
         let isEditingAnnotation = viewModel.selectedAnnotationIndex != nil

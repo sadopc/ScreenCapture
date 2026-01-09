@@ -72,6 +72,18 @@ final class SettingsViewModel {
         set { jpegQuality = newValue / 100 }
     }
 
+    /// Launch at login
+    var launchAtLogin: Bool {
+        get { settings.launchAtLogin }
+        set { settings.launchAtLogin = newValue }
+    }
+
+    /// Auto-save on close
+    var autoSaveOnClose: Bool {
+        get { settings.autoSaveOnClose }
+        set { settings.autoSaveOnClose = newValue }
+    }
+
     /// Full screen capture shortcut
     var fullScreenShortcut: KeyboardShortcut {
         get { settings.fullScreenShortcut }
