@@ -91,6 +91,11 @@ final class RecentCapturesStore: ObservableObject {
 
     // MARK: - Persistence
 
+    /// Reloads captures from UserDefaults (call before displaying menu)
+    func reload() {
+        loadCaptures()
+    }
+
     /// Loads captures from UserDefaults via AppSettings
     private func loadCaptures() {
         captures = settings.recentCaptures

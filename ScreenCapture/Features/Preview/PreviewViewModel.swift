@@ -263,6 +263,42 @@ final class PreviewViewModel {
         onDismiss?()
     }
 
+    /// Loads a recent capture into the editor for editing
+    func loadCapture(_ capture: RecentCapture) {
+        guard capture.fileExists else { return }
+
+        // Load image from file
+        guard let nsImage = NSImage(contentsOf: capture.filePath),
+              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+
+        // Clear undo/redo stacks
+        undoStack.removeAll()
+        redoStack.removeAll()
+
+        // Create new screenshot with the loaded image
+        screenshot = Screenshot(
+            image: cgImage,
+            captureDate: capture.captureDate,
+            sourceDisplay: DisplayInfo(
+                id: 0,
+                name: "Recent Capture",
+                frame: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height),
+                scaleFactor: 1.0,
+                isPrimary: true
+            ),
+            filePath: capture.filePath
+        )
+
+        // Reset tool state
+        selectedTool = nil
+        _currentAnnotation = nil
+        selectedAnnotationIndex = nil
+        isCropMode = false
+        cropRect = nil
+    }
+
     /// Adds an annotation to the screenshot
     func addAnnotation(_ annotation: Annotation) {
         pushUndoState()
@@ -509,9 +545,8 @@ final class PreviewViewModel {
         // Exit crop mode
         isCropMode = false
         cropRect = nil
-
-        // Notify that image size changed (for window resize)
-        imageSizeChangeCounter += 1
+        // Note: We don't increment imageSizeChangeCounter here because
+        // crop should not resize the window, only the image within it
     }
 
     /// Cancels the current crop selection
@@ -824,9 +859,14 @@ final class PreviewViewModel {
         _textInputPosition = nil
     }
 
-    /// Dismisses the preview (Escape key action)
+    /// Dismisses the preview - auto-saves before closing if enabled
     func dismiss() {
-        hide()
+        // Auto-save if enabled and not already saved
+        if settings.autoSaveOnClose && screenshot.filePath == nil && !isSaving {
+            saveScreenshot()
+        } else {
+            hide()
+        }
     }
 
     /// Copies the screenshot to clipboard (Cmd+C action)

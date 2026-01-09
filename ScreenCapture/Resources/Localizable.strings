@@ -37,6 +37,7 @@
 "menu.capture.full.screen" = "Capture Full Screen";
 "menu.capture.fullscreen" = "Capture Full Screen";
 "menu.capture.selection" = "Capture Selection";
+"menu.capture.window" = "Capture Window";
 "menu.recent.captures" = "Recent Captures";
 "menu.recent.captures.empty" = "No Recent Captures";
 "menu.recent.captures.clear" = "Clear Recent";
@@ -123,3 +124,14 @@
 "permission.prompt.message" = "ScreenCapture needs permission to capture your screen. This is required to take screenshots.\n\nAfter clicking Continue, macOS will ask you to grant Screen Recording permission. You can grant it in System Settings > Privacy & Security > Screen Recording.";
 "permission.prompt.continue" = "Continue";
 "permission.prompt.later" = "Later";
+
+/* Window Selector */
+"window.selector.header" = "Choose window to capture:";
+"window.selector.instructions" = "Click on a window to capture. Press ESC to cancel.";
+
+/* Settings - Window Shortcut */
+"settings.shortcut.window" = "Window Capture";
+"settings.shortcut.window.shadow" = "Window with Shadow";
+
+/* Menu - Window with Shadow */
+"menu.capture.window.shadow" = "Capture Window with Shadow";
