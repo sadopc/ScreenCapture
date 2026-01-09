@@ -27,6 +27,7 @@ final class AppSettings {
         static let strokeWidth = prefix + "strokeWidth"
         static let textSize = prefix + "textSize"
         static let rectangleFilled = prefix + "rectangleFilled"
+        static let blurRadius = prefix + "blurRadius"
         static let recentCaptures = prefix + "recentCaptures"
         static let autoSaveOnClose = prefix + "autoSaveOnClose"
     }
@@ -86,6 +87,11 @@ final class AppSettings {
     /// Whether rectangles are filled (solid) by default
     var rectangleFilled: Bool {
         didSet { save(rectangleFilled, forKey: Keys.rectangleFilled) }
+    }
+
+    /// Default blur radius for blur tool
+    var blurRadius: CGFloat {
+        didSet { save(Double(blurRadius), forKey: Keys.blurRadius) }
     }
 
     /// Last 5 saved captures
@@ -160,6 +166,7 @@ final class AppSettings {
         strokeWidth = CGFloat(defaults.object(forKey: Keys.strokeWidth) as? Double ?? 2.0)
         textSize = CGFloat(defaults.object(forKey: Keys.textSize) as? Double ?? 14.0)
         rectangleFilled = defaults.object(forKey: Keys.rectangleFilled) as? Bool ?? false
+        blurRadius = CGFloat(defaults.object(forKey: Keys.blurRadius) as? Double ?? 15.0)
 
         // Load recent captures
         recentCaptures = Self.loadRecentCaptures()
@@ -213,6 +220,7 @@ final class AppSettings {
         strokeWidth = 2.0
         textSize = 14.0
         rectangleFilled = false
+        blurRadius = 15.0
         recentCaptures = []
         autoSaveOnClose = true
     }

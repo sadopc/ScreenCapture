@@ -291,8 +291,17 @@ final class PreviewWindow: NSPanel {
                     }
                 }
                 return
-            case "1", "2", "3", "4":
-                // Number keys to quickly select tools (1=Rectangle, 2=Freehand, 3=Arrow, 4=Text)
+            case "b":
+                Task { @MainActor in
+                    if viewModel.selectedTool == .blur {
+                        viewModel.selectTool(nil)
+                    } else {
+                        viewModel.selectTool(.blur)
+                    }
+                }
+                return
+            case "1", "2", "3", "4", "5":
+                // Number keys to quickly select tools (1=Rectangle, 2=Freehand, 3=Arrow, 4=Text, 5=Blur)
                 let toolIndex = Int(String(char))! - 1
                 let tools = AnnotationToolType.allCases
                 if toolIndex < tools.count {

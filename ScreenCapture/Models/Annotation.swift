@@ -8,6 +8,7 @@ enum Annotation: Identifiable, Equatable, Sendable {
     case freehand(FreehandAnnotation)
     case arrow(ArrowAnnotation)
     case text(TextAnnotation)
+    case blur(BlurAnnotation)
 
     /// Unique identifier for this annotation
     var id: UUID {
@@ -19,6 +20,8 @@ enum Annotation: Identifiable, Equatable, Sendable {
         case .arrow(let annotation):
             return annotation.id
         case .text(let annotation):
+            return annotation.id
+        case .blur(let annotation):
             return annotation.id
         }
     }
@@ -34,6 +37,8 @@ enum Annotation: Identifiable, Equatable, Sendable {
             return annotation.bounds
         case .text(let annotation):
             return annotation.bounds
+        case .blur(let annotation):
+            return annotation.rect
         }
     }
 }
@@ -200,6 +205,61 @@ struct TextAnnotation: Identifiable, Equatable, Sendable {
     }
 }
 
+// MARK: - Blur Annotation
+
+/// A blur annotation that obscures content along a painted brush stroke.
+struct BlurAnnotation: Identifiable, Equatable, Sendable {
+    /// Unique identifier
+    let id: UUID
+
+    /// Points along the blur brush stroke (in image coordinates)
+    var points: [CGPoint]
+
+    /// Blur intensity (sigma value for Gaussian blur)
+    var blurRadius: CGFloat
+
+    /// Brush size (diameter of the blur brush)
+    var brushSize: CGFloat
+
+    init(id: UUID = UUID(), points: [CGPoint] = [], blurRadius: CGFloat = 15.0, brushSize: CGFloat = 40.0) {
+        self.id = id
+        self.points = points
+        self.blurRadius = blurRadius
+        self.brushSize = brushSize
+    }
+
+    /// The bounding rect of all points plus brush size
+    var rect: CGRect {
+        bounds
+    }
+
+    /// Computed bounding box of all points
+    var bounds: CGRect {
+        guard !points.isEmpty else { return .zero }
+
+        let xs = points.map { $0.x }
+        let ys = points.map { $0.y }
+
+        guard let minX = xs.min(), let maxX = xs.max(),
+              let minY = ys.min(), let maxY = ys.max() else {
+            return .zero
+        }
+
+        let padding = brushSize / 2
+        return CGRect(
+            x: minX - padding,
+            y: minY - padding,
+            width: maxX - minX + brushSize,
+            height: maxY - minY + brushSize
+        )
+    }
+
+    /// Whether this annotation has meaningful content
+    var isValid: Bool {
+        points.count >= 2
+    }
+}
+
 // MARK: - CGPoint Sendable Conformance
 
 extension CGPoint: @retroactive @unchecked Sendable {}
@@ -218,6 +278,8 @@ extension Annotation {
             return NSLocalizedString("tool.arrow", comment: "")
         case .text:
             return NSLocalizedString("tool.text", comment: "")
+        case .blur:
+            return NSLocalizedString("tool.blur", comment: "")
         }
     }
 }

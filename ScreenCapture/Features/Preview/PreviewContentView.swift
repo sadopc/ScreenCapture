@@ -123,10 +123,11 @@ struct PreviewContentView: View {
                         Spacer()
 
                         ZStack(alignment: .topLeading) {
-                            // Base image
-                            Image(viewModel.image, scale: 1.0, label: Text("Screenshot"))
+                            // Base image - use source scale factor for proper Retina display
+                            Image(viewModel.image, scale: viewModel.sourceScaleFactor, label: Text("Screenshot"))
                                 .resizable()
-                                .interpolation(.high)  // High quality downscaling
+                                .interpolation(.none)  // No interpolation - pixel perfect
+                                .antialiased(false)    // Disable antialiasing
                                 .aspectRatio(contentMode: .fit)
                                 .frame(
                                     width: displayInfo.displaySize.width,
@@ -140,7 +141,8 @@ struct PreviewContentView: View {
                                 currentAnnotation: viewModel.currentAnnotation,
                                 canvasSize: imageSize,
                                 scale: displayInfo.scale,
-                                selectedIndex: viewModel.selectedAnnotationIndex
+                                selectedIndex: viewModel.selectedAnnotationIndex,
+                                originalImage: viewModel.image
                             )
                             .frame(
                                 width: displayInfo.displaySize.width,
@@ -261,7 +263,7 @@ struct PreviewContentView: View {
         }
 
         switch tool {
-        case .rectangle, .freehand, .arrow:
+        case .rectangle, .freehand, .arrow, .blur:
             return .crosshair
         case .text:
             return .iBeam
@@ -626,9 +628,10 @@ struct PreviewContentView: View {
         let effectiveToolType = isEditingAnnotation ? viewModel.selectedAnnotationType : viewModel.selectedTool
 
         return HStack(spacing: 8) {
-            // Color picker with preset colors
-            HStack(spacing: 4) {
-                ForEach(presetColors, id: \.self) { color in
+            // Color picker with preset colors (not shown for blur tool)
+            if effectiveToolType != .blur {
+                HStack(spacing: 4) {
+                    ForEach(presetColors, id: \.self) { color in
                     Button {
                         if isEditingAnnotation {
                             viewModel.updateSelectedAnnotationColor(CodableColor(color))
@@ -675,6 +678,7 @@ struct PreviewContentView: View {
                 ), supportsOpacity: false)
                 .labelsHidden()
                 .frame(width: 24)
+                }
             }
 
             // Rectangle fill toggle (for rectangle only)
@@ -701,8 +705,8 @@ struct PreviewContentView: View {
                 .help(isFilled ? "Filled (click for hollow)" : "Hollow (click for filled)")
             }
 
-            // Stroke width control
-            if effectiveToolType == .freehand || effectiveToolType == .arrow ||
+            // Stroke width control (also controls brush size for blur)
+            if effectiveToolType == .freehand || effectiveToolType == .arrow || effectiveToolType == .blur ||
                (effectiveToolType == .rectangle && !(isEditingAnnotation ? (viewModel.selectedAnnotationIsFilled ?? false) : AppSettings.shared.rectangleFilled)) {
                 Divider()
                     .frame(height: 20)
@@ -780,6 +784,48 @@ struct PreviewContentView: View {
                         ? Int(viewModel.selectedAnnotationFontSize ?? 16)
                         : Int(AppSettings.shared.textSize)
                     Text("\(size)")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 20)
+                }
+            }
+
+            // Blur radius control
+            if effectiveToolType == .blur {
+                Divider()
+                    .frame(height: 20)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "eye.slash")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    Slider(
+                        value: Binding(
+                            get: {
+                                if isEditingAnnotation {
+                                    return viewModel.selectedAnnotationBlurRadius ?? 15.0
+                                }
+                                return AppSettings.shared.blurRadius
+                            },
+                            set: { newRadius in
+                                if isEditingAnnotation {
+                                    viewModel.updateSelectedAnnotationBlurRadius(newRadius)
+                                } else {
+                                    AppSettings.shared.blurRadius = newRadius
+                                }
+                            }
+                        ),
+                        in: 5.0...30.0,
+                        step: 1
+                    )
+                    .frame(width: 60)
+                    .tint(.white)
+
+                    let radius = isEditingAnnotation
+                        ? Int(viewModel.selectedAnnotationBlurRadius ?? 15)
+                        : Int(AppSettings.shared.blurRadius)
+                    Text("\(radius)")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.7))
                         .frame(width: 20)
@@ -906,8 +952,8 @@ struct PreviewContentView: View {
                     .frame(height: 16)
             }
 
-            // Stroke width control (for rectangle/freehand/arrow - only show for hollow rectangles)
-            if effectiveToolType == .freehand || effectiveToolType == .arrow ||
+            // Stroke width control (for rectangle/freehand/arrow/blur - only show for hollow rectangles)
+            if effectiveToolType == .freehand || effectiveToolType == .arrow || effectiveToolType == .blur ||
                (effectiveToolType == .rectangle && !(isEditingAnnotation ? (viewModel.selectedAnnotationIsFilled ?? false) : AppSettings.shared.rectangleFilled)) {
                 HStack(spacing: 4) {
                     Image(systemName: "lineweight")

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreImage
 
 /// SwiftUI Canvas view for drawing and displaying annotations.
 /// Renders existing annotations and in-progress drawing.
@@ -20,6 +21,12 @@ struct AnnotationCanvas: View {
 
     /// Index of the selected annotation (nil = none selected)
     var selectedIndex: Int?
+
+    /// The original image (needed for blur rendering)
+    var originalImage: CGImage?
+
+    /// Cached CIContext for blur rendering
+    private static let ciContext = CIContext()
 
     // MARK: - Body
 
@@ -67,6 +74,11 @@ struct AnnotationCanvas: View {
             return false
         }.count
 
+        let blurCount = annotations.filter {
+            if case .blur = $0 { return true }
+            return false
+        }.count
+
         var parts: [String] = []
         if rectangleCount > 0 {
             parts.append("\(rectangleCount) rectangle\(rectangleCount == 1 ? "" : "s")")
@@ -76,6 +88,9 @@ struct AnnotationCanvas: View {
         }
         if textCount > 0 {
             parts.append("\(textCount) text\(textCount == 1 ? "" : "s")")
+        }
+        if blurCount > 0 {
+            parts.append("\(blurCount) blur\(blurCount == 1 ? "" : "s")")
         }
 
         return "Annotations: \(parts.joined(separator: ", "))"
@@ -98,6 +113,8 @@ struct AnnotationCanvas: View {
             drawArrow(arrow, in: &context, size: size)
         case .text(let text):
             drawText(text, in: &context, size: size)
+        case .blur(let blur):
+            drawBlur(blur, in: &context, size: size)
         }
     }
 
@@ -229,6 +246,126 @@ struct AnnotationCanvas: View {
             context.resolve(text),
             at: scaledPoint,
             anchor: .topLeading
+        )
+    }
+
+    /// Draws a blur annotation with brush-based blur effect
+    private func drawBlur(
+        _ annotation: BlurAnnotation,
+        in context: inout GraphicsContext,
+        size: CGSize
+    ) {
+        guard annotation.points.count >= 2 else { return }
+
+        guard let originalImage = originalImage else {
+            drawBlurPlaceholder(annotation, in: &context)
+            return
+        }
+
+        let imageWidth = CGFloat(originalImage.width)
+        let imageHeight = CGFloat(originalImage.height)
+
+        // Get bounds of the blur stroke
+        let bounds = annotation.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        // Clamp to image bounds
+        let clampedBounds = CGRect(
+            x: max(0, bounds.origin.x),
+            y: max(0, bounds.origin.y),
+            width: min(bounds.width, imageWidth - max(0, bounds.origin.x)),
+            height: min(bounds.height, imageHeight - max(0, bounds.origin.y))
+        )
+
+        guard clampedBounds.width > 0, clampedBounds.height > 0 else { return }
+
+        // Convert to CG coordinates (bottom-left origin)
+        let cgBounds = CGRect(
+            x: clampedBounds.origin.x,
+            y: imageHeight - clampedBounds.origin.y - clampedBounds.height,
+            width: clampedBounds.width,
+            height: clampedBounds.height
+        )
+
+        // Crop the region
+        guard let croppedImage = originalImage.cropping(to: cgBounds) else { return }
+
+        // Apply Gaussian blur (invert the range so higher values = more blur)
+        let ciImage = CIImage(cgImage: croppedImage)
+        let effectiveSigma = 35.0 - annotation.blurRadius  // 5→30 (intense), 30→5 (light)
+        let blurredCIImage = ciImage.applyingGaussianBlur(sigma: effectiveSigma)
+
+        // Clamp the blurred image back to original bounds (blur expands the extent)
+        let clampedBlurred = blurredCIImage.clamped(to: ciImage.extent)
+        guard let blurredCGImage = Self.ciContext.createCGImage(clampedBlurred, from: ciImage.extent) else {
+            drawBlurPlaceholder(annotation, in: &context)
+            return
+        }
+
+        // Create the brush stroke path in view coordinates
+        var brushPath = Path()
+        let scaledPoints = annotation.points.map { scalePoint($0) }
+        let scaledBrushSize = annotation.brushSize * scale
+
+        for point in scaledPoints {
+            brushPath.addEllipse(in: CGRect(
+                x: point.x - scaledBrushSize / 2,
+                y: point.y - scaledBrushSize / 2,
+                width: scaledBrushSize,
+                height: scaledBrushSize
+            ))
+        }
+
+        // Also connect points with thick line for continuous coverage
+        if scaledPoints.count >= 2 {
+            var linePath = Path()
+            linePath.move(to: scaledPoints[0])
+            for point in scaledPoints.dropFirst() {
+                linePath.addLine(to: point)
+            }
+            let strokedLine = linePath.strokedPath(SwiftUI.StrokeStyle(
+                lineWidth: scaledBrushSize,
+                lineCap: .round,
+                lineJoin: .round
+            ))
+            brushPath.addPath(strokedLine)
+        }
+
+        // Draw the blurred image clipped to the brush path
+        let scaledBounds = scaleRect(clampedBounds)
+        let blurImage = Image(decorative: blurredCGImage, scale: 1.0)
+
+        // Use drawLayer to isolate the clipping operation
+        context.drawLayer { layerContext in
+            var ctx = layerContext
+            ctx.clip(to: brushPath)
+            ctx.draw(blurImage, in: scaledBounds)
+        }
+    }
+
+    /// Fallback placeholder when blur can't be rendered
+    private func drawBlurPlaceholder(
+        _ annotation: BlurAnnotation,
+        in context: inout GraphicsContext
+    ) {
+        guard annotation.points.count >= 2 else { return }
+
+        // Draw the brush stroke path as a visual indicator
+        var brushPath = Path()
+        let scaledPoints = annotation.points.map { scalePoint($0) }
+        let scaledBrushSize = annotation.brushSize * scale
+
+        if scaledPoints.count >= 2 {
+            brushPath.move(to: scaledPoints[0])
+            for point in scaledPoints.dropFirst() {
+                brushPath.addLine(to: point)
+            }
+        }
+
+        context.stroke(
+            brushPath,
+            with: .color(.white.opacity(0.6)),
+            style: SwiftUI.StrokeStyle(lineWidth: scaledBrushSize, lineCap: .round, lineJoin: .round)
         )
     }
 

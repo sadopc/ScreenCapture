@@ -563,6 +563,10 @@ final class SelectionOverlayController {
             overlayWindows.append(overlayWindow)
         }
 
+        // IMPORTANT: Activate the app BEFORE showing windows
+        // This prevents the first click from being absorbed as a "click to focus" event
+        NSApp.activate(ignoringOtherApps: true)
+
         // Show all overlay windows
         for window in overlayWindows {
             window.showOverlay()
@@ -571,7 +575,6 @@ final class SelectionOverlayController {
         // Make the first window (primary display) key
         if let primaryWindow = overlayWindows.first {
             primaryWindow.makeKey()
-            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
