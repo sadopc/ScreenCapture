@@ -4,7 +4,7 @@ import Foundation
 /// Manages display selection UI when multiple displays are connected.
 /// Provides a popup menu for the user to select which display to capture.
 @MainActor
-final class DisplaySelector {
+final class DisplaySelector: NSObject {
     // MARK: - Types
 
     /// Result of display selection
@@ -23,6 +23,9 @@ final class DisplaySelector {
 
     /// Menu delegate (retained to prevent deallocation)
     private var menuDelegate: DisplaySelectorMenuDelegate?
+
+    /// Flag to track if a selection was made (to avoid treating menu close as cancellation)
+    private var selectionWasMade = false
 
     // MARK: - Public API
 
@@ -54,6 +57,9 @@ final class DisplaySelector {
     /// Creates and shows the display selection menu.
     /// - Parameter displays: Available displays to choose from
     private func showSelectionMenu(for displays: [DisplayInfo]) {
+        // Reset selection flag
+        selectionWasMade = false
+
         let menu = NSMenu(title: NSLocalizedString("display.selector.title", comment: "Select Display"))
 
         // Add header item (disabled, for context)
@@ -100,30 +106,57 @@ final class DisplaySelector {
     /// Called when a display is selected from the menu.
     /// - Parameter sender: The selected menu item
     @objc private func displaySelected(_ sender: NSMenuItem) {
-        guard let displayItem = sender as? DisplayMenuItem else { return }
+        NSLog("[DisplaySelector] displaySelected called")
+        guard let displayItem = sender as? DisplayMenuItem else {
+            NSLog("[DisplaySelector] ERROR: sender is not DisplayMenuItem")
+            return
+        }
+        NSLog("[DisplaySelector] Selected: %@", displayItem.display.name)
+        // Mark that a selection was made (prevents menuDidClose from cancelling)
+        selectionWasMade = true
         completeSelection(with: .selected(displayItem.display))
     }
 
     /// Called when selection is cancelled.
     @objc private func selectionCancelled() {
+        NSLog("[DisplaySelector] selectionCancelled called")
+        selectionWasMade = true  // Explicit cancel is also a "selection"
         completeSelection(with: .cancelled)
     }
 
     /// Called when the menu is dismissed without selection.
     fileprivate func menuDidClose() {
-        // If continuation is still pending, treat as cancellation
-        if selectionContinuation != nil {
-            completeSelection(with: .cancelled)
+        NSLog("[DisplaySelector] menuDidClose called, selectionWasMade: %@, continuation pending: %@",
+              selectionWasMade ? "yes" : "no",
+              selectionContinuation != nil ? "yes" : "no")
+        // Only treat as cancellation if no selection was made
+        // (menuDidClose fires before displaySelected, so we use a small delay)
+        if !selectionWasMade {
+            // Use async dispatch to allow displaySelected to fire first
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                // Check again after the dispatch - displaySelected may have run
+                if !self.selectionWasMade && self.selectionContinuation != nil {
+                    NSLog("[DisplaySelector] No selection made, treating as cancellation")
+                    self.completeSelection(with: .cancelled)
+                }
+            }
         }
     }
 
     /// Completes the selection with the given result.
     /// - Parameter result: The selection result
     private func completeSelection(with result: SelectionResult) {
+        NSLog("[DisplaySelector] completeSelection called with result")
         selectionMenu = nil
         menuDelegate = nil
-        selectionContinuation?.resume(returning: result)
-        selectionContinuation = nil
+        if selectionContinuation != nil {
+            NSLog("[DisplaySelector] Resuming continuation")
+            selectionContinuation?.resume(returning: result)
+            selectionContinuation = nil
+        } else {
+            NSLog("[DisplaySelector] WARNING: continuation was nil!")
+        }
     }
 }
 

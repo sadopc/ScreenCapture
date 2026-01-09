@@ -131,3 +131,7 @@
 
 /* Settings - Window Shortcut */
 "settings.shortcut.window" = "Window Capture";
+"settings.shortcut.window.shadow" = "Window with Shadow";
+
+/* Menu - Window with Shadow */
+"menu.capture.window.shadow" = "Capture Window with Shadow";

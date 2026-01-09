@@ -9,6 +9,9 @@ final class PreviewWindow: NSPanel {
     /// The view model for this preview
     private let viewModel: PreviewViewModel
 
+    /// The recent captures store
+    private let recentCapturesStore: RecentCapturesStore
+
     /// The hosting view for SwiftUI content
     private var hostingView: NSHostingView<PreviewContentView>?
 
@@ -17,16 +20,19 @@ final class PreviewWindow: NSPanel {
     /// Creates a new preview window for the given screenshot.
     /// - Parameters:
     ///   - screenshot: The screenshot to preview
+    ///   - recentCapturesStore: The store for recent captures
     ///   - onDismiss: Callback when the window should close
     ///   - onSave: Callback when the screenshot is saved
     @MainActor
     init(
         screenshot: Screenshot,
+        recentCapturesStore: RecentCapturesStore,
         onDismiss: @escaping () -> Void,
         onSave: @escaping (URL) -> Void
     ) {
         // Create view model
-        self.viewModel = PreviewViewModel(screenshot: screenshot)
+        self.viewModel = PreviewViewModel(screenshot: screenshot, recentCapturesStore: recentCapturesStore)
+        self.recentCapturesStore = recentCapturesStore
         viewModel.onDismiss = onDismiss
         viewModel.onSave = onSave
 
@@ -74,7 +80,7 @@ final class PreviewWindow: NSPanel {
     /// Sets up the SwiftUI hosting view
     @MainActor
     private func setupHostingView() {
-        let contentView = PreviewContentView(viewModel: viewModel)
+        let contentView = PreviewContentView(viewModel: viewModel, recentCapturesStore: recentCapturesStore)
         let hosting = NSHostingView(rootView: contentView)
         hosting.autoresizingMask = [.width, .height]
 
@@ -357,6 +363,9 @@ final class PreviewWindowController: NSWindowController {
     /// The current preview window
     private var previewWindow: PreviewWindow?
 
+    /// Recent captures store (shared across previews)
+    private var recentCapturesStore: RecentCapturesStore?
+
     /// Shared instance
     static let shared = PreviewWindowController()
 
@@ -373,6 +382,11 @@ final class PreviewWindowController: NSWindowController {
 
     // MARK: - Public API
 
+    /// Sets the recent captures store to use for previews.
+    func setRecentCapturesStore(_ store: RecentCapturesStore) {
+        self.recentCapturesStore = store
+    }
+
     /// Shows a preview window for the given screenshot.
     /// - Parameters:
     ///   - screenshot: The screenshot to preview
@@ -384,9 +398,16 @@ final class PreviewWindowController: NSWindowController {
         // Close any existing preview
         closePreview()
 
+        // Ensure we have a recent captures store
+        let store = recentCapturesStore ?? RecentCapturesStore()
+        if recentCapturesStore == nil {
+            recentCapturesStore = store
+        }
+
         // Create new preview window
         previewWindow = PreviewWindow(
             screenshot: screenshot,
+            recentCapturesStore: store,
             onDismiss: { [weak self] in
                 self?.closePreview()
             },

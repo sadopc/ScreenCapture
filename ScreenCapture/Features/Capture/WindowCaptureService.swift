@@ -59,27 +59,16 @@ actor WindowCaptureService {
             throw ScreenCaptureError.captureFailure(underlying: error)
         }
 
-        #if DEBUG
-        print("=== Window enumeration ===")
-        print("Total windows from SCK: \(content.windows.count)")
-        #endif
-
         // Filter windows
         let myBundleID = Bundle.main.bundleIdentifier
         let filteredWindows = content.windows.filter { window in
             // Must have an owning application
             guard let app = window.owningApplication else {
-                #if DEBUG
-                print("Excluding window (no app): \(window.title ?? "untitled")")
-                #endif
                 return false
             }
 
             // Exclude our own app
             if app.bundleIdentifier == myBundleID {
-                #if DEBUG
-                print("Excluding own app window: \(window.title ?? "untitled")")
-                #endif
                 return false
             }
 
@@ -90,24 +79,14 @@ actor WindowCaptureService {
 
             // Exclude Finder desktop windows (they cover the whole screen)
             if app.bundleIdentifier == "com.apple.finder" && window.title == nil {
-                #if DEBUG
-                print("Excluding Finder desktop window")
-                #endif
                 return false
             }
 
             // Exclude windows below layer 0 (desktop level)
             // Note: Normal windows are at layer 0, so we only exclude negative layers
             if window.windowLayer < 0 {
-                #if DEBUG
-                print("Excluding window at layer \(window.windowLayer): \(app.applicationName) - \(window.title ?? "untitled")")
-                #endif
                 return false
             }
-
-            #if DEBUG
-            print("Including window: \(app.applicationName) - \(window.title ?? "untitled") layer=\(window.windowLayer) frame=\(window.frame)")
-            #endif
 
             return true
         }
@@ -152,31 +131,94 @@ actor WindowCaptureService {
     }
 
     /// Captures the window with the given ID.
-    /// - Parameter windowID: The CGWindowID to capture
+    /// - Parameters:
+    ///   - windowID: The CGWindowID to capture
+    ///   - includeShadow: Whether to include the window shadow in the capture
     /// - Returns: Screenshot containing the captured window image
     /// - Throws: ScreenCaptureError if capture fails
-    func captureWindowByID(_ windowID: CGWindowID) async throws -> Screenshot {
+    func captureWindowByID(_ windowID: CGWindowID, includeShadow: Bool = false) async throws -> Screenshot {
         // Invalidate cache to get fresh window list
         invalidateCache()
         let windows = try await getWindows()
 
-        #if DEBUG
-        print("Looking for window ID: \(windowID)")
-        print("Available SCK windows: \(windows.map { "\($0.windowID): \($0.displayName)" })")
-        #endif
-
         guard let window = windows.first(where: { $0.windowID == windowID }) else {
-            #if DEBUG
-            print("Window ID \(windowID) not found in SCK list!")
-            #endif
             throw ScreenCaptureError.captureError(message: "Window not found (ID: \(windowID))")
         }
 
-        #if DEBUG
-        print("Found window: \(window.displayName)")
-        #endif
+        if includeShadow {
+            return try await captureWindowWithShadow(windowID: windowID, window: window)
+        } else {
+            return try await captureWindow(window)
+        }
+    }
 
-        return try await captureWindow(window)
+    /// Captures a window with its shadow by capturing a larger region
+    /// - Parameters:
+    ///   - windowID: The CGWindowID to capture
+    ///   - window: The SCWindow for display info
+    /// - Returns: Screenshot containing the captured window with shadow
+    private func captureWindowWithShadow(windowID: CGWindowID, window: SCWindow) async throws -> Screenshot {
+        // Shadow is typically about 20-30 pixels around the window
+        // We'll capture a region larger than the window to include the shadow
+        let shadowPadding: CGFloat = 30
+
+        // Get the display containing this window
+        let display = try await findDisplayForWindow(window)
+
+        // Calculate the expanded rect with shadow padding
+        let expandedRect = CGRect(
+            x: max(0, window.frame.origin.x - shadowPadding - display.frame.origin.x),
+            y: max(0, window.frame.origin.y - shadowPadding - display.frame.origin.y),
+            width: window.frame.width + shadowPadding * 2,
+            height: window.frame.height + shadowPadding * 2
+        )
+
+        // Get the SCDisplay for this display
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let scDisplay = content.displays.first(where: { $0.displayID == display.id }) else {
+            throw ScreenCaptureError.captureError(message: "Display not found for window capture")
+        }
+
+        // Create filter to capture just this window on the display
+        // We include the window in the filter to get its shadow
+        let filter = SCContentFilter(display: scDisplay, including: [window])
+
+        // Configure capture
+        let config = SCStreamConfiguration()
+        let scaleFactor = await MainActor.run {
+            NSScreen.screens.first(where: {
+                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == display.id
+            })?.backingScaleFactor ?? 2.0
+        }
+
+        config.width = Int(expandedRect.width * scaleFactor)
+        config.height = Int(expandedRect.height * scaleFactor)
+        config.sourceRect = expandedRect
+        config.scalesToFit = false
+        config.pixelFormat = kCVPixelFormatType_32BGRA
+        config.showsCursor = false
+        config.colorSpaceName = CGColorSpace.sRGB
+
+        if #available(macOS 14.0, *) {
+            config.captureResolution = .best
+        }
+
+        // Capture
+        let cgImage: CGImage
+        do {
+            cgImage = try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: config
+            )
+        } catch {
+            throw ScreenCaptureError.captureFailure(underlying: error)
+        }
+
+        return Screenshot(
+            image: cgImage,
+            captureDate: Date(),
+            sourceDisplay: display
+        )
     }
 
     /// Captures the specified window.
@@ -206,26 +248,9 @@ actor WindowCaptureService {
 
             let cocoaPoint = CGPoint(x: windowCenter.x, y: cocoaY)
 
-            #if DEBUG
-            print("=== SCALE FACTOR DEBUG ===")
-            print("Window frame (Quartz): \(windowFrame)")
-            print("Window center (Quartz): \(windowCenter)")
-            print("Primary screen height: \(primaryScreenHeight)")
-            print("Cocoa point: \(cocoaPoint)")
-            for (i, screen) in NSScreen.screens.enumerated() {
-                print("Screen \(i): frame=\(screen.frame), scale=\(screen.backingScaleFactor)")
-            }
-            #endif
-
             let matchingScreen = NSScreen.screens.first { screen in
                 screen.frame.contains(cocoaPoint)
             }
-
-            #if DEBUG
-            print("Matching screen: \(matchingScreen?.localizedName ?? "NONE")")
-            print("Using scale factor: \(matchingScreen?.backingScaleFactor ?? 2.0)")
-            print("=== END SCALE FACTOR DEBUG ===")
-            #endif
 
             return matchingScreen?.backingScaleFactor ?? 2.0
         }
@@ -242,14 +267,6 @@ actor WindowCaptureService {
             config.captureResolution = .best
         }
 
-        #if DEBUG
-        print("=== CAPTURE CONFIG ===")
-        print("Window size (points): \(window.frame.width) x \(window.frame.height)")
-        print("Scale factor: \(scaleFactor)")
-        print("Capture size (pixels): \(config.width) x \(config.height)")
-        print("=== END CAPTURE CONFIG ===")
-        #endif
-
         // Capture the window
         let cgImage: CGImage
         do {
@@ -260,12 +277,6 @@ actor WindowCaptureService {
         } catch {
             throw ScreenCaptureError.captureFailure(underlying: error)
         }
-
-        #if DEBUG
-        print("=== CAPTURED IMAGE ===")
-        print("Actual image size: \(cgImage.width) x \(cgImage.height)")
-        print("=== END CAPTURED IMAGE ===")
-        #endif
 
         // Create display info for the window's location
         // Get the display containing this window

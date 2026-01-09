@@ -20,6 +20,8 @@ final class SettingsViewModel {
     /// Whether a shortcut is currently being recorded
     var isRecordingFullScreenShortcut = false
     var isRecordingSelectionShortcut = false
+    var isRecordingWindowShortcut = false
+    var isRecordingWindowWithShadowShortcut = false
 
     /// Temporary storage for shortcut recording
     var recordedShortcut: KeyboardShortcut?
@@ -84,6 +86,24 @@ final class SettingsViewModel {
         get { settings.selectionShortcut }
         set {
             settings.selectionShortcut = newValue
+            appDelegate?.updateHotkeys()
+        }
+    }
+
+    /// Window capture shortcut
+    var windowShortcut: KeyboardShortcut {
+        get { settings.windowShortcut }
+        set {
+            settings.windowShortcut = newValue
+            appDelegate?.updateHotkeys()
+        }
+    }
+
+    /// Window with shadow capture shortcut
+    var windowWithShadowShortcut: KeyboardShortcut {
+        get { settings.windowWithShadowShortcut }
+        set {
+            settings.windowWithShadowShortcut = newValue
             appDelegate?.updateHotkeys()
         }
     }
@@ -247,6 +267,8 @@ final class SettingsViewModel {
     func startRecordingFullScreenShortcut() {
         isRecordingFullScreenShortcut = true
         isRecordingSelectionShortcut = false
+        isRecordingWindowShortcut = false
+        isRecordingWindowWithShadowShortcut = false
         recordedShortcut = nil
     }
 
@@ -254,6 +276,26 @@ final class SettingsViewModel {
     func startRecordingSelectionShortcut() {
         isRecordingFullScreenShortcut = false
         isRecordingSelectionShortcut = true
+        isRecordingWindowShortcut = false
+        isRecordingWindowWithShadowShortcut = false
+        recordedShortcut = nil
+    }
+
+    /// Starts recording a keyboard shortcut for window capture
+    func startRecordingWindowShortcut() {
+        isRecordingFullScreenShortcut = false
+        isRecordingSelectionShortcut = false
+        isRecordingWindowShortcut = true
+        isRecordingWindowWithShadowShortcut = false
+        recordedShortcut = nil
+    }
+
+    /// Starts recording a keyboard shortcut for window with shadow capture
+    func startRecordingWindowWithShadowShortcut() {
+        isRecordingFullScreenShortcut = false
+        isRecordingSelectionShortcut = false
+        isRecordingWindowShortcut = false
+        isRecordingWindowWithShadowShortcut = true
         recordedShortcut = nil
     }
 
@@ -261,6 +303,8 @@ final class SettingsViewModel {
     func cancelRecording() {
         isRecordingFullScreenShortcut = false
         isRecordingSelectionShortcut = false
+        isRecordingWindowShortcut = false
+        isRecordingWindowWithShadowShortcut = false
         recordedShortcut = nil
     }
 
@@ -268,7 +312,9 @@ final class SettingsViewModel {
     /// - Parameter event: The key event
     /// - Returns: Whether the event was handled
     func handleKeyEvent(_ event: NSEvent) -> Bool {
-        guard isRecordingFullScreenShortcut || isRecordingSelectionShortcut else {
+        let isRecording = isRecordingFullScreenShortcut || isRecordingSelectionShortcut ||
+                          isRecordingWindowShortcut || isRecordingWindowWithShadowShortcut
+        guard isRecording else {
             return false
         }
 
@@ -291,20 +337,29 @@ final class SettingsViewModel {
         }
 
         // Check for conflicts with other shortcuts
-        if isRecordingFullScreenShortcut && shortcut == selectionShortcut {
-            showError("This shortcut is already used for Selection Capture")
-            return true
-        }
-        if isRecordingSelectionShortcut && shortcut == fullScreenShortcut {
-            showError("This shortcut is already used for Full Screen Capture")
-            return true
+        let allShortcuts = [
+            ("Full Screen Capture", fullScreenShortcut, isRecordingFullScreenShortcut),
+            ("Selection Capture", selectionShortcut, isRecordingSelectionShortcut),
+            ("Window Capture", windowShortcut, isRecordingWindowShortcut),
+            ("Window with Shadow", windowWithShadowShortcut, isRecordingWindowWithShadowShortcut)
+        ]
+
+        for (name, existingShortcut, isCurrentlyRecording) in allShortcuts {
+            if !isCurrentlyRecording && shortcut == existingShortcut {
+                showError("This shortcut is already used for \(name)")
+                return true
+            }
         }
 
         // Apply the shortcut
         if isRecordingFullScreenShortcut {
             fullScreenShortcut = shortcut
-        } else {
+        } else if isRecordingSelectionShortcut {
             selectionShortcut = shortcut
+        } else if isRecordingWindowShortcut {
+            windowShortcut = shortcut
+        } else if isRecordingWindowWithShadowShortcut {
+            windowWithShadowShortcut = shortcut
         }
 
         // End recording
@@ -320,6 +375,16 @@ final class SettingsViewModel {
     /// Resets selection shortcut to default
     func resetSelectionShortcut() {
         selectionShortcut = .selectionDefault
+    }
+
+    /// Resets window shortcut to default
+    func resetWindowShortcut() {
+        windowShortcut = .windowDefault
+    }
+
+    /// Resets window with shadow shortcut to default
+    func resetWindowWithShadowShortcut() {
+        windowWithShadowShortcut = .windowWithShadowDefault
     }
 
     /// Resets all settings to defaults

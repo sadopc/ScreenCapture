@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 /// Manages the menu bar status item and its menu.
 /// Responsible for setting up the menu bar icon and building the app menu.
@@ -15,8 +16,20 @@ final class MenuBarController {
     /// Store for recent captures
     private let recentCapturesStore: RecentCapturesStore
 
+    /// The main menu
+    private var menu: NSMenu?
+
     /// The submenu for recent captures
     private var recentCapturesMenu: NSMenu?
+
+    /// Menu items that need shortcut updates
+    private var fullScreenMenuItem: NSMenuItem?
+    private var selectionMenuItem: NSMenuItem?
+    private var windowMenuItem: NSMenuItem?
+    private var windowWithShadowMenuItem: NSMenuItem?
+
+    /// Settings observation
+    private var settingsObservation: Any?
 
     // MARK: - Initialization
 
@@ -36,7 +49,11 @@ final class MenuBarController {
             button.image?.isTemplate = true
         }
 
-        statusItem?.menu = buildMenu()
+        menu = buildMenu()
+        statusItem?.menu = menu
+
+        // Observe settings changes to update shortcuts
+        observeSettingsChanges()
     }
 
     /// Removes the status item from the menu bar
@@ -45,6 +62,48 @@ final class MenuBarController {
             NSStatusBar.system.removeStatusItem(item)
             statusItem = nil
         }
+        settingsObservation = nil
+    }
+
+    // MARK: - Settings Observation
+
+    private func observeSettingsChanges() {
+        // Use a timer-based approach since @Observable doesn't work well with NSMenu
+        // Check every 0.5 seconds for changes
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateShortcutsInMenu()
+            }
+        }
+    }
+
+    /// Updates shortcut display in menu items
+    private func updateShortcutsInMenu() {
+        let settings = AppSettings.shared
+
+        // Update Full Screen
+        if let item = fullScreenMenuItem {
+            item.keyEquivalent = settings.fullScreenShortcut.menuKeyEquivalent
+            item.keyEquivalentModifierMask = settings.fullScreenShortcut.menuModifierMask
+        }
+
+        // Update Selection
+        if let item = selectionMenuItem {
+            item.keyEquivalent = settings.selectionShortcut.menuKeyEquivalent
+            item.keyEquivalentModifierMask = settings.selectionShortcut.menuModifierMask
+        }
+
+        // Update Window
+        if let item = windowMenuItem {
+            item.keyEquivalent = settings.windowShortcut.menuKeyEquivalent
+            item.keyEquivalentModifierMask = settings.windowShortcut.menuModifierMask
+        }
+
+        // Update Window with Shadow
+        if let item = windowWithShadowMenuItem {
+            item.keyEquivalent = settings.windowWithShadowShortcut.menuKeyEquivalent
+            item.keyEquivalentModifierMask = settings.windowWithShadowShortcut.menuModifierMask
+        }
     }
 
     // MARK: - Menu Construction
@@ -52,36 +111,57 @@ final class MenuBarController {
     /// Builds the complete menu for the status item
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.minimumWidth = 250  // Ensure all options are visible
+
+        let settings = AppSettings.shared
 
         // Capture Full Screen
         let fullScreenItem = NSMenuItem(
             title: NSLocalizedString("menu.capture.full.screen", comment: "Capture Full Screen"),
             action: #selector(AppDelegate.captureFullScreen),
-            keyEquivalent: "3"
+            keyEquivalent: settings.fullScreenShortcut.menuKeyEquivalent
         )
-        fullScreenItem.keyEquivalentModifierMask = [.command, .shift]
+        fullScreenItem.keyEquivalentModifierMask = settings.fullScreenShortcut.menuModifierMask
         fullScreenItem.target = appDelegate
         menu.addItem(fullScreenItem)
+        self.fullScreenMenuItem = fullScreenItem
+        NSLog("[MenuBar] Full screen menu item: keyEquiv=%@, modifiers=%lu, target=%@",
+              fullScreenItem.keyEquivalent,
+              UInt(fullScreenItem.keyEquivalentModifierMask.rawValue),
+              String(describing: fullScreenItem.target))
 
         // Capture Selection
         let selectionItem = NSMenuItem(
             title: NSLocalizedString("menu.capture.selection", comment: "Capture Selection"),
             action: #selector(AppDelegate.captureSelection),
-            keyEquivalent: "4"
+            keyEquivalent: settings.selectionShortcut.menuKeyEquivalent
         )
-        selectionItem.keyEquivalentModifierMask = [.command, .shift]
+        selectionItem.keyEquivalentModifierMask = settings.selectionShortcut.menuModifierMask
         selectionItem.target = appDelegate
         menu.addItem(selectionItem)
+        self.selectionMenuItem = selectionItem
 
         // Capture Window
         let windowItem = NSMenuItem(
             title: NSLocalizedString("menu.capture.window", comment: "Capture Window"),
             action: #selector(AppDelegate.captureWindow),
-            keyEquivalent: "6"
+            keyEquivalent: settings.windowShortcut.menuKeyEquivalent
         )
-        windowItem.keyEquivalentModifierMask = [.command, .shift]
+        windowItem.keyEquivalentModifierMask = settings.windowShortcut.menuModifierMask
         windowItem.target = appDelegate
         menu.addItem(windowItem)
+        self.windowMenuItem = windowItem
+
+        // Capture Window with Shadow
+        let windowShadowItem = NSMenuItem(
+            title: NSLocalizedString("menu.capture.window.shadow", comment: "Capture Window with Shadow"),
+            action: #selector(AppDelegate.captureWindowWithShadow),
+            keyEquivalent: settings.windowWithShadowShortcut.menuKeyEquivalent
+        )
+        windowShadowItem.keyEquivalentModifierMask = settings.windowWithShadowShortcut.menuModifierMask
+        windowShadowItem.target = appDelegate
+        menu.addItem(windowShadowItem)
+        self.windowWithShadowMenuItem = windowShadowItem
 
         menu.addItem(NSMenuItem.separator())
 
